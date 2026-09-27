@@ -9,10 +9,11 @@ import { t } from "@/i18n";
 export const metadata = { title: t.transfer.title };
 
 export default async function NewTransferPage() {
+  // Transfers may cross workspaces (e.g. paying yourself from the business account).
   const accs = await accounts.listAccounts();
   const options = accs.map((a) => (
     <option key={a.id} value={a.id}>
-      {a.name} · {a.currency}
+      {a.name} · {a.currency} · {t.enums.workspace[a.workspace]}
     </option>
   ));
   return (
@@ -38,7 +39,7 @@ export default async function NewTransferPage() {
           <input name="note" className="input" />
         </Field>
         <div className="flex justify-end gap-2 sm:col-span-2">
-          <Link href="/transactions" className="btn">{t.common.cancel}</Link>
+          <Link href="/money/transactions" className="btn">{t.common.cancel}</Link>
           <SubmitButton>{t.common.create}</SubmitButton>
         </div>
       </ActionForm>

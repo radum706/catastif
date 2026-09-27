@@ -23,7 +23,8 @@ export type TxFormValues = {
   invoicedAt?: string | null;
   categoryId?: number | null;
   payeeId?: number | null;
-  context: "personal" | "work";
+  projectId?: number | null;
+  taskId?: number | null;
   notes?: string | null;
 };
 
@@ -32,7 +33,6 @@ type PayeeOption = Option & {
   defaultDirection: Dir | null;
   defaultCategoryId: number | null;
   defaultAccountId: number | null;
-  defaultContext: "personal" | "work" | null;
 };
 
 const STATUSES: Record<Dir, Status[]> = { out: ["upcoming", "paid"], in: ["upcoming", "invoiced", "received"] };
@@ -43,12 +43,17 @@ export function TransactionForm({
   accounts,
   categories,
   payees,
+  projects,
   returnTo,
   lockDirection,
+  taskTitle,
 }: {
   action: (s: ActionState, fd: FormData) => Promise<ActionState>;
   initial: TxFormValues;
-  accounts: (Option & { currency: CurrencyCode; context: "personal" | "work" })[];
+  accounts: (Option & { currency: CurrencyCode })[];
+  projects: Option[];
+  /** Shown when the transaction is linked to a task. */
+  taskTitle?: string | null;
   categories: (Option & { kind: "income" | "expense"; parentId: number | null })[];
   payees: PayeeOption[];
   returnTo: string;
@@ -59,7 +64,6 @@ export function TransactionForm({
   const [accountId, setAccountId] = useState(initial.accountId ?? accounts[0]?.id);
   const [categoryId, setCategoryId] = useState(initial.categoryId ?? "");
   const [payeeId, setPayeeId] = useState(initial.payeeId ?? "");
-  const [context, setContext] = useState(initial.context);
   const [title, setTitle] = useState(initial.title);
 
   const statuses = STATUSES[direction];
@@ -75,7 +79,6 @@ export function TransactionForm({
     if (!initial.id) {
       if (p.defaultDirection && !lockDirection) setDirection(p.defaultDirection);
       if (p.defaultAccountId) setAccountId(p.defaultAccountId);
-      if (p.defaultContext) setContext(p.defaultContext);
       if (!title) setTitle(p.name);
     }
     if (p.defaultCategoryId && !categoryId) setCategoryId(p.defaultCategoryId);
@@ -86,6 +89,12 @@ export function TransactionForm({
       {initial.id && <input type="hidden" name="id" value={initial.id} />}
       <input type="hidden" name="returnTo" value={returnTo} />
       <input type="hidden" name="direction" value={direction} />
+      {initial.taskId && <input type="hidden" name="taskId" value={initial.taskId} />}
+      {taskTitle && (
+        <p className="rounded-lg bg-accent/10 px-3 py-2 text-sm">
+          ↳ {taskTitle}
+        </p>
+      )}
 
       <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label={t.tx.direction}>
         {(["out", "in"] as const).map((d) => (
@@ -171,10 +180,12 @@ export function TransactionForm({
         ) : (
           <div />
         )}
-        <Field label={t.tx.context}>
-          <select name="context" className="input" value={context} onChange={(e) => setContext(e.target.value as "personal" | "work")}>
-            <option value="personal">{t.enums.context.personal}</option>
-            <option value="work">{t.enums.context.work}</option>
+        <Field label={t.tasks.project}>
+          <select name="projectId" className="input" defaultValue={initial.projectId ?? ""}>
+            <option value="">{t.tasks.noProject}</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
           </select>
         </Field>
       </div>

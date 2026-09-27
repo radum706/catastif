@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { accounts, categories, payees, recurring, transactions } from "@/server/api";
 import { requireSession } from "@/server/auth/session";
+import { getWorkspace } from "@/server/workspace";
 import { fmt, t } from "@/i18n";
 import {
   bool,
@@ -20,7 +21,6 @@ import {
 } from "./form";
 
 type Dir = "in" | "out";
-type Ctx = "personal" | "work";
 
 /** Runs a mutation, returns a form error instead of throwing, then redirects on success. */
 async function run(fn: () => Promise<unknown>, redirectTo?: string): Promise<ActionState> {
@@ -57,26 +57,31 @@ function txFields(fd: FormData) {
     invoicedAt: optStr(fd, "invoicedAt"),
     categoryId: optInt(fd, "categoryId"),
     payeeId: optInt(fd, "payeeId"),
-    context: (optStr(fd, "context") ?? undefined) as Ctx | undefined,
+    projectId: optInt(fd, "projectId"),
+    taskId: optInt(fd, "taskId"),
     notes: optStr(fd, "notes"),
   };
 }
 
 export async function createTransactionAction(_: ActionState, fd: FormData) {
-  return run(() => transactions.createTransaction(txFields(fd)), safeReturnTo(fd, "/transactions"));
+  return run(() => transactions.createTransaction(txFields(fd)), safeReturnTo(fd, "/money/transactions"));
 }
 
 export async function updateTransactionAction(_: ActionState, fd: FormData) {
   return run(
     () => transactions.updateTransaction({ id: int(fd, "id"), ...txFields(fd) }),
-    safeReturnTo(fd, "/transactions"),
+    safeReturnTo(fd, "/money/transactions"),
   );
 }
 
 export async function quickAddAction(_: ActionState, fd: FormData): Promise<ActionState> {
   await requireSession();
   try {
-    const tx = await transactions.quickAdd({ text: str(fd, "text"), accountId: optInt(fd, "accountId") });
+    const tx = await transactions.quickAdd({
+      text: str(fd, "text"),
+      accountId: optInt(fd, "accountId"),
+      workspace: await getWorkspace(),
+    });
     revalidatePath("/", "layout");
     return { message: fmt(t.quickAdd.added, { title: tx.title }), ts: Date.now() };
   } catch (err) {
@@ -113,7 +118,7 @@ export async function createTransferAction(_: ActionState, fd: FormData) {
         date: optDate(fd, "date"),
         note: optStr(fd, "note"),
       }),
-    "/transactions",
+    "/money/transactions",
   );
 }
 
@@ -126,14 +131,14 @@ export async function saveAccountAction(_: ActionState, fd: FormData) {
     type: str(fd, "type") as "bank" | "cash" | "card" | "other",
     openingBalance: signedMoney(fd, "openingBalance"),
     openingDate: optDate(fd, "openingDate"),
-    context: str(fd, "context") as Ctx,
     notes: optStr(fd, "notes"),
   };
+  const workspace = await getWorkspace();
   return run(
     () =>
       id
         ? accounts.updateAccount({ id, ...common, archived: bool(fd, "archived") })
-        : accounts.createAccount({ ...common, currency: str(fd, "currency") as "EUR" | "RON" }),
+        : accounts.createAccount({ ...common, workspace, currency: str(fd, "currency") as "EUR" | "RON" }),
     "/settings/accounts",
   );
 }
@@ -145,8 +150,10 @@ export async function deleteAccountAction(_: ActionState, fd: FormData) {
 // ---------- categories ----------
 
 export async function createCategoryAction(_: ActionState, fd: FormData) {
+  const workspace = await getWorkspace();
   return run(() =>
     categories.createCategory({
+      workspace,
       name: str(fd, "name"),
       kind: str(fd, "kind") as "income" | "expense",
       parentId: optInt(fd, "parentId"),
@@ -167,7 +174,8 @@ export async function deleteCategoryAction(fd: FormData) {
 }
 
 export async function seedCategoriesAction() {
-  await act(() => categories.seedDefaultCategories());
+  const workspace = await getWorkspace();
+  await act(() => categories.seedDefaultCategories(workspace));
 }
 
 // ---------- payees ----------
@@ -178,7 +186,6 @@ function payeeFields(fd: FormData) {
     defaultDirection: (optStr(fd, "defaultDirection") as Dir | null) ?? null,
     defaultCategoryId: optInt(fd, "defaultCategoryId"),
     defaultAccountId: optInt(fd, "defaultAccountId"),
-    defaultContext: (optStr(fd, "defaultContext") as Ctx | null) ?? null,
     notes: optStr(fd, "notes"),
   };
 }
@@ -186,7 +193,10 @@ function payeeFields(fd: FormData) {
 export async function savePayeeAction(_: ActionState, fd: FormData) {
   const id = optInt(fd, "id");
   return run(
-    () => (id ? payees.updatePayee({ id, ...payeeFields(fd) }) : payees.createPayee(payeeFields(fd))),
+    async () =>
+      id
+        ? payees.updatePayee({ id, ...payeeFields(fd) })
+        : payees.createPayee({ ...payeeFields(fd), workspace: await getWorkspace() }),
     id ? "/settings/payees" : undefined,
   );
 }
@@ -206,7 +216,6 @@ function ruleFields(fd: FormData) {
     accountId: int(fd, "accountId"),
     categoryId: optInt(fd, "categoryId"),
     payeeId: optInt(fd, "payeeId"),
-    context: str(fd, "context") as Ctx,
     frequency: str(fd, "frequency") as "daily" | "weekly" | "monthly" | "yearly",
     interval: int(fd, "interval") || 1,
     startDate: str(fd, "startDate"),

@@ -39,13 +39,6 @@ export function PayeeForm({ payee, accounts, categories, reset }: Opts & { payee
           ))}
         </select>
       </Field>
-      <Field label={t.payee.defaultContext}>
-        <select name="defaultContext" className="input" defaultValue={payee?.defaultContext ?? ""}>
-          <option value="">{t.common.none}</option>
-          <option value="personal">{t.enums.context.personal}</option>
-          <option value="work">{t.enums.context.work}</option>
-        </select>
-      </Field>
       <SubmitButton>{payee ? t.common.save : t.payee.add}</SubmitButton>
     </ActionForm>
   );

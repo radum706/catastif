@@ -10,12 +10,11 @@ import { t } from "@/i18n";
 
 export default async function EditPayeePage({ params }: PageProps<"/settings/payees/[id]">) {
   const { id } = await params;
-  const [rows, opts] = await Promise.all([payees.listPayees({ includeArchived: true }), formOptions()]);
-  const payee = rows.find((p) => p.id === Number(id));
-  if (!payee) notFound();
+  const payee = await payees.getPayee(Number(id)).catch(() => notFound());
+  const opts = await formOptions(payee.workspace);
   return (
     <>
-      <PageHeader title={payee.name} actions={<Link href={`/transactions?payee=${payee.id}`} className="btn">{t.nav.transactions} →</Link>} />
+      <PageHeader title={payee.name} actions={<Link href={`/money/transactions?payee=${payee.id}`} className="btn">{t.nav.transactions} →</Link>} />
       <PayeeForm payee={payee} accounts={opts.accounts} categories={opts.categories} />
       <form action={deletePayeeAction} className="mt-4 flex justify-end">
         <input type="hidden" name="id" value={payee.id} />

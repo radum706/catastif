@@ -7,7 +7,7 @@ import { saveAccountAction } from "@/server/actions/money";
 import type { Account } from "@/server/db/schema";
 import { t } from "@/i18n";
 
-export function AccountForm({ account }: { account?: Account }) {
+export function AccountForm({ account, workspace }: { account?: Account; workspace: "personal" | "work" }) {
   return (
     <ActionForm action={saveAccountAction} className="card grid gap-4 p-4 sm:grid-cols-2 sm:p-5">
       {account && <input type="hidden" name="id" value={account.id} />}
@@ -27,11 +27,8 @@ export function AccountForm({ account }: { account?: Account }) {
           <option value="EUR">EUR</option>
         </select>
       </Field>
-      <Field label={t.account.context}>
-        <select name="context" className="input" defaultValue={account?.context ?? "personal"}>
-          <option value="personal">{t.enums.context.personal}</option>
-          <option value="work">{t.enums.context.work}</option>
-        </select>
+      <Field label={t.workspace.switch} hint={t.account.workspaceHint}>
+        <input className="input" value={t.enums.workspace[account?.workspace ?? workspace]} disabled />
       </Field>
       <Field label={t.account.openingBalance}>
         <input name="openingBalance" inputMode="decimal" className="input num" defaultValue={account ? minorToInput(account.openingBalance) : "0"} />

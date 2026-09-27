@@ -68,7 +68,7 @@ export function TxRow({
     <li className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-3">
-          <Link href={`/transactions/${tx.id}`} className="truncate font-medium hover:underline">
+          <Link href={`/money/transactions/${tx.id}`} className="truncate font-medium hover:underline">
             {tx.title}
           </Link>
           <Money amount={tx.amount} currency={tx.currency} direction={tx.direction} className="sm:hidden" />
@@ -78,7 +78,6 @@ export function TxRow({
           <span>· {row.accountName}</span>
           {category && <span>· {category}</span>}
           {row.payeeName && !tx.title.toLowerCase().includes(row.payeeName.toLowerCase()) && <span>· {row.payeeName}</span>}
-          {tx.context === "work" && <span>· {t.enums.context.work}</span>}
           {tx.transferId && <span>· ⇄ {t.tx.transfer}</span>}
           {tx.recurringRuleId && <span title={t.tx.fromRule}>· ↻</span>}
           {showStatus && <StatusBadge status={tx.status} />}

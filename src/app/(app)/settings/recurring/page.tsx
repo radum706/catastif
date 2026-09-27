@@ -2,17 +2,19 @@ import Link from "next/link";
 import { Badge, Empty, LinkButton, Money, PageHeader } from "@/components/ui";
 import { formatShortDate } from "@/lib/dates";
 import { recurring } from "@/server/api";
+import { getWorkspace } from "@/server/workspace";
 import { fmt, t } from "@/i18n";
 
 export const metadata = { title: t.settings.recurring };
 
 export default async function RecurringPage() {
-  const rules = await recurring.listRules();
+  const ws = await getWorkspace();
+  const rules = await recurring.listRules({ workspace: ws });
   return (
     <>
       <PageHeader
         title={t.settings.recurring}
-        intro={t.settings.recurringHint}
+        intro={`${t.settings.recurringHint} · ${fmt(t.settings.inWorkspace, { ws: t.enums.workspace[ws] })}`}
         actions={<LinkButton href="/settings/recurring/new" primary>+ {t.rule.add}</LinkButton>}
       />
       {rules.length === 0 ? (

@@ -5,28 +5,30 @@ import { Empty, LinkButton, Money, PageHeader, Section } from "@/components/ui";
 import { formatShortDate, today } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import { accounts, categories, forecast, payees, payments, transactions } from "@/server/api";
+import { getWorkspace } from "@/server/workspace";
 import { fmt, t } from "@/i18n";
 
-export const metadata = { title: t.home.title };
+export const metadata = { title: t.nav.money };
 
 export default async function HomePage() {
   const now = today();
+  const ws = await getWorkspace();
   const [accs, safe, balances, month, spending, counts, payeeRows, categoryRows, recent] = await Promise.all([
-    accounts.listAccounts(),
-    forecast.safeToSpend(),
-    forecast.balanceAt({ date: now }),
-    payments.monthSummary(now),
-    payments.spendingByCategory(now),
-    payments.openCounts(),
-    payees.listPayees(),
-    categories.listCategories(),
-    transactions.listTransactions({ limit: 6, to: now }),
+    accounts.listAccounts({ workspace: ws }),
+    forecast.safeToSpend(ws),
+    forecast.balanceAt({ date: now, workspace: ws }),
+    payments.monthSummary(now, ws),
+    payments.spendingByCategory(now, ws),
+    payments.openCounts(ws),
+    payees.listPayees({ workspace: ws }),
+    categories.listCategories({ workspace: ws }),
+    transactions.listTransactions({ limit: 6, to: now, workspace: ws }),
   ]);
 
   if (!accs.length) {
     return (
       <>
-        <PageHeader title={t.home.title} />
+        <PageHeader title={t.nav.money} />
         <Empty>
           {t.home.setupHint} <Link href="/settings/accounts/new" className="font-medium text-accent underline">{t.home.addAccount}</Link>
         </Empty>
@@ -50,10 +52,10 @@ export default async function HomePage() {
       {(counts.overdueBills > 0 || counts.lateIncome > 0) && (
         <div className="mb-6 flex flex-wrap gap-2">
           {counts.overdueBills > 0 && (
-            <Link href="/bills" className="btn border-out/40 text-out">⚠ {fmt(t.home.overdueBills, { n: counts.overdueBills })}</Link>
+            <Link href="/money/bills" className="btn border-out/40 text-out">⚠ {fmt(t.home.overdueBills, { n: counts.overdueBills })}</Link>
           )}
           {counts.lateIncome > 0 && (
-            <Link href="/collect" className="btn border-warn/40 text-warn">⏳ {fmt(t.home.lateIncome, { n: counts.lateIncome })}</Link>
+            <Link href="/money/collect" className="btn border-warn/40 text-warn">⏳ {fmt(t.home.lateIncome, { n: counts.lateIncome })}</Link>
           )}
         </div>
       )}
@@ -77,7 +79,7 @@ export default async function HomePage() {
       </Section>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Section title={t.home.balances} aside={<Link href="/forecast" className="text-xs text-accent">{t.nav.forecast} →</Link>}>
+        <Section title={t.home.balances} aside={<Link href="/money/forecast" className="text-xs text-accent">{t.nav.forecast} →</Link>}>
           <ul className="card divide-y divide-border">
             {balances.perAccount.map((b) => (
               <li key={b.account.id} className="flex items-center justify-between px-4 py-2.5">
@@ -140,7 +142,7 @@ export default async function HomePage() {
         </Section>
       </div>
 
-      <Section title={t.nav.transactions} aside={<LinkButton href="/transactions">{t.tx.listTitle} →</LinkButton>}>
+      <Section title={t.nav.transactions} aside={<LinkButton href="/money/transactions">{t.tx.listTitle} →</LinkButton>}>
         {recent.length ? (
           <TxList>
             {recent.map((r) => (

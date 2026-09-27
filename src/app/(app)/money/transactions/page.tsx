@@ -5,6 +5,7 @@ import { addDays, formatShortDate, today } from "@/lib/dates";
 import type { CurrencyCode } from "@/lib/money";
 import { accounts, categories, payees, transactions } from "@/server/api";
 import { param } from "@/server/form-data";
+import { getWorkspace } from "@/server/workspace";
 import { fmt, t } from "@/i18n";
 
 export const metadata = { title: t.tx.listTitle };
@@ -14,7 +15,7 @@ type Status = (typeof STATUSES)[number];
 const numOrUndef = (v?: string) => (v && /^\d+$/.test(v) ? Number(v) : undefined);
 const dateOrUndef = (v?: string) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined);
 
-export default async function TransactionsPage({ searchParams }: PageProps<"/transactions">) {
+export default async function TransactionsPage({ searchParams }: PageProps<"/money/transactions">) {
   const sp = await searchParams;
   const f = {
     q: param(sp, "q") || undefined,
@@ -23,17 +24,17 @@ export default async function TransactionsPage({ searchParams }: PageProps<"/tra
     payeeId: numOrUndef(param(sp, "payee")),
     direction: (["in", "out"].includes(param(sp, "direction") ?? "") ? param(sp, "direction") : undefined) as "in" | "out" | undefined,
     status: STATUSES.includes(param(sp, "status") as Status) ? [param(sp, "status") as Status] : undefined,
-    context: (["personal", "work"].includes(param(sp, "context") ?? "") ? param(sp, "context") : undefined) as "personal" | "work" | undefined,
     from: dateOrUndef(param(sp, "from")),
     to: dateOrUndef(param(sp, "to")),
   };
   // Recurring rules plan a year ahead; by default stop a month out so today isn't buried.
   const defaultTo = f.to ? undefined : addDays(today(), 31);
+  const ws = await getWorkspace();
   const [rows, accs, cats, pays] = await Promise.all([
-    transactions.listTransactions({ ...f, to: f.to ?? defaultTo, limit: 300 }),
-    accounts.listAccounts({ includeArchived: true }),
-    categories.listCategories(),
-    payees.listPayees(),
+    transactions.listTransactions({ ...f, workspace: ws, to: f.to ?? defaultTo, limit: 300 }),
+    accounts.listAccounts({ workspace: ws, includeArchived: true }),
+    categories.listCategories({ workspace: ws }),
+    payees.listPayees({ workspace: ws }),
   ]);
 
   const net = new Map<CurrencyCode, number>();
@@ -56,8 +57,8 @@ export default async function TransactionsPage({ searchParams }: PageProps<"/tra
         title={t.tx.listTitle}
         actions={
           <>
-            <Link href="/transfers/new" className="btn">⇄ {t.tx.newTransfer}</Link>
-            <Link href="/transactions/new" className="btn btn-primary">+ {t.tx.add}</Link>
+            <Link href="/money/transfers/new" className="btn">⇄ {t.tx.newTransfer}</Link>
+            <Link href="/money/transactions/new" className="btn btn-primary">+ {t.tx.add}</Link>
           </>
         }
       />
@@ -72,7 +73,6 @@ export default async function TransactionsPage({ searchParams }: PageProps<"/tra
           {sel("payee", f.payeeId, pays.map((p) => ({ v: p.id, l: p.name })), t.tx.payee)}
           {sel("direction", f.direction, [{ v: "in", l: t.enums.direction.in }, { v: "out", l: t.enums.direction.out }], t.tx.direction)}
           {sel("status", f.status?.[0], STATUSES.map((s) => ({ v: s, l: t.enums.status[s] })), t.tx.status)}
-          {sel("context", f.context, [{ v: "personal", l: t.enums.context.personal }, { v: "work", l: t.enums.context.work }], t.tx.context)}
           <div className="grid grid-cols-2 gap-2">
             <Field label={t.tx.from}>
               <input type="date" name="from" defaultValue={f.from} className="input" />
@@ -83,7 +83,7 @@ export default async function TransactionsPage({ searchParams }: PageProps<"/tra
           </div>
           <div className="flex items-end gap-2 sm:col-span-3 lg:col-span-4">
             <button className="btn btn-primary">{t.common.filter}</button>
-            <Link href="/transactions" className="btn">{t.common.reset}</Link>
+            <Link href="/money/transactions" className="btn">{t.common.reset}</Link>
           </div>
         </form>
       </details>

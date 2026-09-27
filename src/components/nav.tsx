@@ -2,28 +2,30 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTransition } from "react";
+import { setWorkspaceAction } from "@/server/actions/workspace";
 import { t } from "@/i18n";
 
 const icons: Record<string, string> = {
   home: "M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z",
-  bills: "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6",
-  collect: "M12 3v12m0 0l-4-4m4 4l4-4M4 19h16",
-  transactions: "M4 7h16M4 12h16M4 17h10",
-  forecast: "M3 17l5-5 4 4 8-8M15 8h5v5",
-  settings: "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM3 12h2m14 0h2M12 3v2m0 14v2M5.6 5.6l1.4 1.4m10 10l1.4 1.4m0-12.8L17 7M7 17l-1.4 1.4",
+  tasks: "M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9",
+  money: "M3 7h18v10H3zM3 10h18M7 14h3",
+  calendar: "M4 6h16v14H4zM4 10h16M8 3v4m8-4v4",
+  inbox: "M4 13l2-8h12l2 8M4 13v6h16v-6M4 13h5l1 2h4l1-2h5",
+  settings:
+    "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM3 12h2m14 0h2M12 3v2m0 14v2M5.6 5.6l1.4 1.4m10 10l1.4 1.4m0-12.8L17 7M7 17l-1.4 1.4",
 };
 
-export const NAV = [
+export const MODULES = [
   { href: "/", key: "home" },
-  { href: "/bills", key: "bills" },
-  { href: "/collect", key: "collect" },
-  { href: "/transactions", key: "transactions" },
-  { href: "/forecast", key: "forecast" },
+  { href: "/tasks", key: "tasks" },
+  { href: "/money", key: "money" },
+  { href: "/calendar", key: "calendar" },
 ] as const;
 
-function Icon({ name }: { name: string }) {
+export function Icon({ name, className = "h-5 w-5" }: { name: string; className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d={icons[name]} />
     </svg>
   );
@@ -31,33 +33,40 @@ function Icon({ name }: { name: string }) {
 
 function useActive() {
   const path = usePathname();
-  return (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
+  return (href: string, exact = false) => (href === "/" || exact ? path === href : path === href || path.startsWith(`${href}/`));
 }
 
-export function TopNav({ badges }: { badges: Partial<Record<string, number>> }) {
+type Badges = Partial<Record<string, number>>;
+
+function Badge({ n }: { n?: number }) {
+  if (!n) return null;
+  return <span className="ml-1.5 rounded-full bg-out px-1.5 text-[10px] font-semibold text-white">{n}</span>;
+}
+
+export function TopNav({ badges }: { badges: Badges }) {
   const isActive = useActive();
   return (
     <nav className="hidden items-center gap-1 md:flex">
-      {[...NAV, { href: "/settings", key: "settings" as const }].map((n) => (
+      {MODULES.map((n) => (
         <Link
           key={n.href}
           href={n.href}
-          className={`relative rounded-lg px-3 py-1.5 text-sm ${isActive(n.href) ? "bg-surface-2 font-medium" : "text-muted hover:text-fg"}`}
+          className={`rounded-lg px-3 py-1.5 text-sm ${isActive(n.href) ? "bg-surface-2 font-medium" : "text-muted hover:text-fg"}`}
         >
           {t.nav[n.key]}
-          {!!badges[n.key] && <span className="ml-1.5 rounded-full bg-out px-1.5 text-[10px] font-semibold text-white">{badges[n.key]}</span>}
+          <Badge n={badges[n.key]} />
         </Link>
       ))}
     </nav>
   );
 }
 
-export function BottomNav({ badges }: { badges: Partial<Record<string, number>> }) {
+export function BottomNav({ badges }: { badges: Badges }) {
   const isActive = useActive();
   return (
     <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
-      <ul className="grid grid-cols-5">
-        {NAV.map((n) => (
+      <ul className="grid grid-cols-4">
+        {MODULES.map((n) => (
           <li key={n.href}>
             <Link
               href={n.href}
@@ -66,7 +75,9 @@ export function BottomNav({ badges }: { badges: Partial<Record<string, number>> 
               <Icon name={n.key} />
               {t.nav[n.key]}
               {!!badges[n.key] && (
-                <span className="absolute right-[calc(50%-18px)] top-1 rounded-full bg-out px-1 text-[9px] font-semibold text-white">{badges[n.key]}</span>
+                <span className="absolute right-[calc(50%-20px)] top-1 rounded-full bg-out px-1 text-[9px] font-semibold text-white">
+                  {badges[n.key]}
+                </span>
               )}
             </Link>
           </li>
@@ -76,10 +87,56 @@ export function BottomNav({ badges }: { badges: Partial<Record<string, number>> 
   );
 }
 
+/** Sub-navigation inside a module (Tasks, Money). */
+export function SubNav({ items }: { items: { href: string; label: string; exact?: boolean; badge?: number }[] }) {
+  const isActive = useActive();
+  return (
+    <nav className="-mx-4 mb-5 overflow-x-auto px-4">
+      <ul className="flex gap-1 border-b border-border">
+        {items.map((i) => (
+          <li key={i.href}>
+            <Link
+              href={i.href}
+              className={`-mb-px flex items-center whitespace-nowrap border-b-2 px-3 py-2 text-sm ${
+                isActive(i.href, i.exact) ? "border-accent font-medium text-fg" : "border-transparent text-muted hover:text-fg"
+              }`}
+            >
+              {i.label}
+              <Badge n={i.badge} />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
+export function WorkspaceSwitcher({ current }: { current: "personal" | "work" }) {
+  const [pending, start] = useTransition();
+  return (
+    <div role="radiogroup" aria-label={t.workspace.switch} className={`flex rounded-lg border border-border bg-surface p-0.5 text-sm ${pending ? "opacity-60" : ""}`}>
+      {(["personal", "work"] as const).map((ws) => (
+        <button
+          key={ws}
+          type="button"
+          role="radio"
+          aria-checked={current === ws}
+          onClick={() => current !== ws && start(() => setWorkspaceAction(ws))}
+          className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
+            current === ws ? (ws === "work" ? "bg-ws-work text-white dark:text-[#1e1b4b]" : "bg-ws-personal text-white dark:text-[#0b1f1d]") : "text-muted hover:text-fg"
+          }`}
+        >
+          {t.enums.workspace[ws]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function SettingsLink() {
   return (
-    <Link href="/settings" className="btn btn-sm md:hidden" aria-label={t.nav.settings}>
-      <Icon name="settings" />
+    <Link href="/settings" className="btn btn-sm" aria-label={t.nav.settings}>
+      <Icon name="settings" className="h-4 w-4" />
     </Link>
   );
 }

@@ -2,15 +2,17 @@ import Link from "next/link";
 import { Badge, Empty, LinkButton, Money, PageHeader } from "@/components/ui";
 import { today } from "@/lib/dates";
 import { forecast } from "@/server/api";
-import { t } from "@/i18n";
+import { getWorkspace } from "@/server/workspace";
+import { fmt, t } from "@/i18n";
 
 export const metadata = { title: t.settings.accounts };
 
 export default async function AccountsPage() {
-  const { perAccount } = await forecast.balanceAt({ date: today(), includeArchived: true });
+  const ws = await getWorkspace();
+  const { perAccount } = await forecast.balanceAt({ date: today(), includeArchived: true, workspace: ws });
   return (
     <>
-      <PageHeader title={t.settings.accounts} actions={<LinkButton href="/settings/accounts/new" primary>+ {t.account.add}</LinkButton>} />
+      <PageHeader title={t.settings.accounts} intro={fmt(t.settings.inWorkspace, { ws: t.enums.workspace[ws] })} actions={<LinkButton href="/settings/accounts/new" primary>+ {t.account.add}</LinkButton>} />
       {perAccount.length === 0 ? (
         <Empty />
       ) : (
@@ -21,7 +23,7 @@ export default async function AccountsPage() {
                 <span>
                   <span className="font-medium">{a.name}</span>{" "}
                   <span className="text-xs text-muted">
-                    {t.enums.accountType[a.type]} · {a.currency} · {t.enums.context[a.context]}
+                    {t.enums.accountType[a.type]} · {a.currency}
                   </span>{" "}
                   {a.archived && <Badge>{t.common.archived}</Badge>}
                 </span>

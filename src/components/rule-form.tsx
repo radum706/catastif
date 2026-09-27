@@ -62,12 +62,6 @@ export function RuleForm({ rule, accounts, categories, payees }: Opts & { rule?:
           </select>
         </Field>
       </div>
-      <Field label={t.tx.context}>
-        <select name="context" className="input" defaultValue={rule?.context ?? "personal"}>
-          <option value="personal">{t.enums.context.personal}</option>
-          <option value="work">{t.enums.context.work}</option>
-        </select>
-      </Field>
       <Field label={t.rule.startDate}>
         <input type="date" name="startDate" required className="input" defaultValue={rule?.startDate ?? today()} />
       </Field>

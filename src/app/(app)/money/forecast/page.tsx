@@ -5,18 +5,23 @@ import { addMonths, formatDate, formatShortDate, isISODate, today } from "@/lib/
 import { formatMoney } from "@/lib/money";
 import { forecast } from "@/server/api";
 import { param } from "@/server/form-data";
+import { getWorkspace } from "@/server/workspace";
 import { fmt, t } from "@/i18n";
 
 export const metadata = { title: t.forecast.title };
 
 const PRESETS = { "1m": 1, "3m": 3, "6m": 6, "1y": 12 } as const;
 
-export default async function ForecastPage({ searchParams }: PageProps<"/forecast">) {
+export default async function ForecastPage({ searchParams }: PageProps<"/money/forecast">) {
   const sp = await searchParams;
   const now = today();
   const raw = param(sp, "date");
   const date = raw && isISODate(raw) ? raw : addMonths(now, 1);
-  const [bal, series] = await Promise.all([forecast.balanceAt({ date }), forecast.forecastSeries({ to: date })]);
+  const ws = await getWorkspace();
+  const [bal, series] = await Promise.all([
+    forecast.balanceAt({ date, workspace: ws }),
+    forecast.forecastSeries({ to: date, workspace: ws }),
+  ]);
   const planned = bal.planned.filter((p) => !p.isTransfer);
   const accountName = new Map(bal.perAccount.map((b) => [b.account.id, b.account.name]));
 
@@ -30,7 +35,7 @@ export default async function ForecastPage({ searchParams }: PageProps<"/forecas
         <button className="btn btn-primary">{t.forecast.show}</button>
         <div className="flex flex-wrap gap-1.5">
           {Object.entries(PRESETS).map(([k, m]) => (
-            <Link key={k} href={`/forecast?date=${addMonths(now, m)}`} className="btn btn-sm">
+            <Link key={k} href={`/money/forecast?date=${addMonths(now, m)}`} className="btn btn-sm">
               {t.forecast.presets[k as keyof typeof PRESETS]}
             </Link>
           ))}
@@ -94,7 +99,7 @@ export default async function ForecastPage({ searchParams }: PageProps<"/forecas
                   <span className="min-w-0">
                     <span className="mr-2 text-xs text-muted">{formatShortDate(p.date)}</span>
                     {p.transactionId ? (
-                      <Link href={`/transactions/${p.transactionId}`} className="hover:underline">{p.title}</Link>
+                      <Link href={`/money/transactions/${p.transactionId}`} className="hover:underline">{p.title}</Link>
                     ) : (
                       p.title
                     )}{" "}

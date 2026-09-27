@@ -3,17 +3,19 @@ import { PayeeForm } from "@/components/payee-form";
 import { Badge, Empty, PageHeader, Section } from "@/components/ui";
 import { payees } from "@/server/api";
 import { formOptions } from "@/server/form-data";
-import { t } from "@/i18n";
+import { getWorkspace } from "@/server/workspace";
+import { fmt, t } from "@/i18n";
 
 export const metadata = { title: t.settings.payees };
 
 export default async function PayeesPage() {
-  const [rows, opts] = await Promise.all([payees.listPayees({ includeArchived: true }), formOptions()]);
+  const ws = await getWorkspace();
+  const [rows, opts] = await Promise.all([payees.listPayees({ workspace: ws, includeArchived: true }), formOptions(ws)]);
   const cat = new Map(opts.categories.map((c) => [c.id, c.name]));
   const acc = new Map(opts.accounts.map((a) => [a.id, a.name]));
   return (
     <>
-      <PageHeader title={t.settings.payees} intro={t.settings.payeesHint} />
+      <PageHeader title={t.settings.payees} intro={`${t.settings.payeesHint} · ${fmt(t.settings.inWorkspace, { ws: t.enums.workspace[ws] })}`} />
       <div className="mb-6">
         <PayeeForm reset accounts={opts.accounts} categories={opts.categories} />
       </div>
@@ -30,7 +32,6 @@ export default async function PayeesPage() {
                     {p.defaultDirection && <Badge tone={p.defaultDirection === "in" ? "good" : "danger"}>{t.enums.direction[p.defaultDirection]}</Badge>}
                     {p.defaultCategoryId && <Badge>{cat.get(p.defaultCategoryId)}</Badge>}
                     {p.defaultAccountId && <Badge>{acc.get(p.defaultAccountId)}</Badge>}
-                    {p.defaultContext && <Badge>{t.enums.context[p.defaultContext]}</Badge>}
                     {p.archived && <Badge>{t.common.archived}</Badge>}
                   </span>
                 </Link>

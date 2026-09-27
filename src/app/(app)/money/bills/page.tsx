@@ -5,6 +5,7 @@ import { formatShortDate } from "@/lib/dates";
 import type { CurrencyCode } from "@/lib/money";
 import { payments } from "@/server/api";
 import type { BillRow } from "@/server/api/payments";
+import { getWorkspace } from "@/server/workspace";
 import { fmt, t } from "@/i18n";
 
 export const metadata = { title: t.bills.title };
@@ -46,14 +47,14 @@ function BillGroup({ title, rows }: { title: string; rows: BillRow[] }) {
 }
 
 export default async function BillsPage() {
-  const b = await payments.bills();
+  const b = await payments.bills({ workspace: await getWorkspace() });
   const open = b.overdue.length + b.dueSoon.length + b.later.length + b.beyond;
   return (
     <>
       <PageHeader
         title={t.bills.title}
         intro={t.bills.intro}
-        actions={<LinkButton href="/transactions/new?direction=out&status=upcoming&returnTo=/bills" primary>+ {t.bills.addBill}</LinkButton>}
+        actions={<LinkButton href="/money/transactions/new?direction=out&status=upcoming&returnTo=/money/bills" primary>+ {t.bills.addBill}</LinkButton>}
       />
       {open === 0 && <Empty />}
       <BillGroup title={t.bills.overdue} rows={b.overdue} />
@@ -62,7 +63,7 @@ export default async function BillsPage() {
       {b.beyond > 0 && (
         <p className="-mt-3 mb-6 text-sm text-muted">
           {fmt(t.bills.beyond, { n: b.beyond })}{" "}
-          <Link href="/forecast" className="text-accent">{t.nav.forecast} →</Link>
+          <Link href="/money/forecast" className="text-accent">{t.nav.forecast} →</Link>
         </p>
       )}
       {b.paidThisMonth.length > 0 && (

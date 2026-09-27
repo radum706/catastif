@@ -2,24 +2,27 @@ import { notFound } from "next/navigation";
 import { ConfirmButton } from "@/components/forms";
 import { TransactionForm } from "@/components/transaction-form";
 import { TxActions } from "@/components/tx-row";
-import { Badge, PageHeader, StatusBadge } from "@/components/ui";
+import { Badge, PageHeader, StatusBadge, WorkspaceBadge } from "@/components/ui";
 import { formatDate } from "@/lib/dates";
 import { deleteTransactionAction, updateTransactionAction } from "@/server/actions/money";
-import { transactions } from "@/server/api";
+import { tasks, transactions } from "@/server/api";
 import { ApiError } from "@/server/api/errors";
 import { formOptions, param, safePath } from "@/server/form-data";
 import { t } from "@/i18n";
 
 export const metadata = { title: t.tx.editTitle };
 
-export default async function EditTransactionPage({ params, searchParams }: PageProps<"/transactions/[id]">) {
+export default async function EditTransactionPage({ params, searchParams }: PageProps<"/money/transactions/[id]">) {
   const [{ id }, sp] = await Promise.all([params, searchParams]);
   const tx = await transactions.getTransaction(Number(id)).catch((e) => {
     if (e instanceof ApiError || Number.isNaN(Number(id))) notFound();
     throw e;
   });
-  const opts = await formOptions();
-  const returnTo = safePath(param(sp, "returnTo"), "/transactions");
+  const [opts, task] = await Promise.all([
+    formOptions(tx.workspace),
+    tx.taskId ? tasks.getTaskRow(tx.taskId).catch(() => null) : null,
+  ]);
+  const returnTo = safePath(param(sp, "returnTo"), "/money/transactions");
 
   return (
     <>
@@ -36,6 +39,7 @@ export default async function EditTransactionPage({ params, searchParams }: Page
             <StatusBadge status={tx.status} />
             {tx.transferId && <Badge>⇄ {t.tx.transfer}</Badge>}
             {tx.recurringRuleId && <Badge>↻ {t.tx.fromRule}</Badge>}
+            <WorkspaceBadge ws={tx.workspace} />
             <TxActions tx={tx} />
           </div>
         }
@@ -45,6 +49,7 @@ export default async function EditTransactionPage({ params, searchParams }: Page
         initial={tx}
         returnTo={returnTo}
         lockDirection={!!tx.transferId}
+        taskTitle={task?.title}
         {...opts}
       />
       <form action={deleteTransactionAction} className="mt-4 flex justify-end">

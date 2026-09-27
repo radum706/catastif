@@ -3,6 +3,7 @@ import { Badge, Empty, LinkButton, Money, PageHeader, Section } from "@/componen
 import type { CurrencyCode } from "@/lib/money";
 import { payments } from "@/server/api";
 import type { CollectRow } from "@/server/api/payments";
+import { getWorkspace } from "@/server/workspace";
 import { fmt, t } from "@/i18n";
 
 export const metadata = { title: t.collect.title };
@@ -42,13 +43,13 @@ function Group({ title, rows }: { title: string; rows: CollectRow[] }) {
 }
 
 export default async function CollectPage() {
-  const c = await payments.toCollect();
+  const c = await payments.toCollect({ workspace: await getWorkspace() });
   return (
     <>
       <PageHeader
         title={t.collect.title}
         intro={t.collect.intro}
-        actions={<LinkButton href="/transactions/new?direction=in&status=upcoming&returnTo=/collect" primary>+ {t.collect.addIncome}</LinkButton>}
+        actions={<LinkButton href="/money/transactions/new?direction=in&status=upcoming&returnTo=/money/collect" primary>+ {t.collect.addIncome}</LinkButton>}
       />
       {c.invoiced.length + c.expected.length === 0 && <Empty />}
       <Group title={t.collect.invoiced} rows={c.invoiced} />

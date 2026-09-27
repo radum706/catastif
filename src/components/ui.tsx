@@ -90,3 +90,36 @@ export function Field({ label, hint, children, className = "" }: { label: string
     </label>
   );
 }
+
+/** Small P / W marker so mixed lists always show which workspace an item belongs to. */
+export function WorkspaceBadge({ ws, long }: { ws: "personal" | "work"; long?: boolean }) {
+  return (
+    <span
+      title={t.enums.workspace[ws]}
+      className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white ${
+        ws === "work" ? "bg-ws-work dark:text-[#1e1b4b]" : "bg-ws-personal dark:text-[#0b1f1d]"
+      }`}
+    >
+      {long ? t.enums.workspace[ws] : t.workspace.badge[ws]}
+    </span>
+  );
+}
+
+const PROJECT_COLOR_VARS: Record<string, string> = {
+  teal: "var(--p-teal)",
+  blue: "var(--p-blue)",
+  violet: "var(--p-violet)",
+  pink: "var(--p-pink)",
+  orange: "var(--p-orange)",
+  amber: "var(--p-amber)",
+  green: "var(--p-green)",
+  slate: "var(--p-slate)",
+};
+
+export function projectColor(name?: string | null) {
+  return PROJECT_COLOR_VARS[name ?? "slate"] ?? PROJECT_COLOR_VARS.slate;
+}
+
+export function ColorDot({ color, className = "" }: { color?: string | null; className?: string }) {
+  return <span className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${className}`} style={{ background: projectColor(color) }} />;
+}

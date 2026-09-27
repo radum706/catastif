@@ -1,33 +1,37 @@
 import Link from "next/link";
-import { BottomNav, SettingsLink, TopNav } from "@/components/nav";
+import { BottomNav, SettingsLink, TopNav, WorkspaceSwitcher } from "@/components/nav";
 import { requireSession } from "@/server/auth/session";
-import { payments } from "@/server/api";
+import { payments, tasks } from "@/server/api";
+import { getWorkspace } from "@/server/workspace";
+import { today } from "@/lib/dates";
 import { t } from "@/i18n";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   await requireSession();
-  const counts = await payments.openCounts();
-  const badges = { bills: counts.overdueBills, collect: counts.lateIncome };
+  const ws = await getWorkspace();
+  const [counts, overdueTasks] = await Promise.all([
+    payments.openCounts(ws),
+    tasks.listTasks({ workspace: ws, completed: false, dueTo: today(), limit: 99 }),
+  ]);
+  const badges = { money: counts.overdueBills, tasks: overdueTasks.length };
 
   return (
-    <div className="min-h-screen pb-24 md:pb-10">
+    <div data-ws={ws} className="min-h-screen pb-24 md:pb-10">
       <header className="sticky top-0 z-20 border-b border-border bg-bg/90 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-2.5">
-          <Link href="/" className="flex items-center gap-2 font-semibold">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/icon.svg" alt="" className="h-7 w-7" />
-            {t.app.name}
-          </Link>
-          <TopNav badges={badges} />
-          <div className="flex items-center gap-2">
-            <Link href="/transactions/new" className="btn btn-primary btn-sm">
-              + {t.nav.add}
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5">
+          <div className="flex items-center gap-3">
+            <Link href="/" className="flex items-center gap-2 font-semibold" aria-label={t.app.name}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/icon.svg" alt="" className="h-7 w-7" />
+              <span className="hidden sm:inline">{t.app.name}</span>
             </Link>
-            <SettingsLink />
+            <WorkspaceSwitcher current={ws} />
           </div>
+          <TopNav badges={badges} />
+          <SettingsLink />
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-4 py-5">{children}</main>
+      <main className="mx-auto max-w-6xl px-4 py-5">{children}</main>
       <BottomNav badges={badges} />
     </div>
   );

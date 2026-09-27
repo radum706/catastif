@@ -30,7 +30,40 @@
   }
 }
 
+/* Each workspace has its own accent so you always know where you are. */
+:root {
+  --ws-personal: #0f766e;
+  --ws-work: #4f46e5;
+}
+[data-ws="work"] {
+  --accent: #4f46e5;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ws-personal: #2dd4bf;
+    --ws-work: #a5b4fc;
+  }
+  [data-ws="work"] {
+    --accent: #a5b4fc;
+    --accent-fg: #1e1b4b;
+  }
+}
+
+/* Project colours */
+:root {
+  --p-teal: #0d9488;
+  --p-blue: #2563eb;
+  --p-violet: #7c3aed;
+  --p-pink: #db2777;
+  --p-orange: #ea580c;
+  --p-amber: #d97706;
+  --p-green: #16a34a;
+  --p-slate: #64748b;
+}
+
 @theme inline {
+  --color-ws-personal: var(--ws-personal);
+  --color-ws-work: var(--ws-work);
   --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);

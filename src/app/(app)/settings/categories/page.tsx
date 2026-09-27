@@ -9,7 +9,8 @@ import {
 } from "@/server/actions/money";
 import { categories } from "@/server/api";
 import type { Category } from "@/server/db/schema";
-import { t } from "@/i18n";
+import { getWorkspace } from "@/server/workspace";
+import { fmt, t } from "@/i18n";
 
 export const metadata = { title: t.settings.categories };
 
@@ -36,7 +37,8 @@ function CategoryItem({ c, child }: { c: Category; child?: boolean }) {
 }
 
 export default async function CategoriesPage() {
-  const all = await categories.listCategories({ includeArchived: true });
+  const ws = await getWorkspace();
+  const all = await categories.listCategories({ workspace: ws, includeArchived: true });
   const roots = all.filter((c) => !c.parentId);
   const children = (id: number) => all.filter((c) => c.parentId === id);
 
@@ -44,6 +46,7 @@ export default async function CategoriesPage() {
     <>
       <PageHeader
         title={t.settings.categories}
+        intro={fmt(t.settings.inWorkspace, { ws: t.enums.workspace[ws] })}
         actions={
           <form action={seedCategoriesAction}>
             <SubmitButton className="btn">{t.category.seed}</SubmitButton>

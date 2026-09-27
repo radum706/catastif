@@ -16,9 +16,9 @@ export default async function EditAccountPage({ params }: PageProps<"/settings/a
     <>
       <PageHeader
         title={account.name}
-        actions={<Link href={`/transactions?account=${account.id}`} className="btn">{t.nav.transactions} →</Link>}
+        actions={<Link href={`/money/transactions?account=${account.id}`} className="btn">{t.nav.transactions} →</Link>}
       />
-      <AccountForm account={account} />
+      <AccountForm account={account} workspace={account.workspace} />
       <ActionForm action={deleteAccountAction} className="mt-4 flex flex-col items-end">
         <input type="hidden" name="id" value={account.id} />
         <ConfirmButton message={t.common.confirmDelete} className="btn btn-danger">{t.common.delete}</ConfirmButton>

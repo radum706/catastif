@@ -13,10 +13,10 @@ export const metadata = { title: t.rule.editTitle };
 export default async function EditRulePage({ params }: PageProps<"/settings/recurring/[id]">) {
   const { id } = await params;
   const rule = await recurring.getRule(Number(id)).catch(() => notFound());
-  const opts = await formOptions();
+  const opts = await formOptions(rule.workspace);
   return (
     <>
-      <PageHeader title={rule.title} actions={<Link href="/transactions?status=upcoming" className="btn">{t.nav.transactions} →</Link>} />
+      <PageHeader title={rule.title} actions={<Link href="/money/transactions?status=upcoming" className="btn">{t.nav.transactions} →</Link>} />
       <RuleForm rule={rule} {...opts} />
       <form action={deleteRuleAction} className="mt-4 flex justify-end">
         <input type="hidden" name="id" value={rule.id} />
