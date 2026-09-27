@@ -10,4 +10,5 @@ export * as projects from "./projects";
 export * as tasks from "./tasks";
 export * as calendar from "./calendar";
 export * as integrations from "./integrations";
+export * as inbox from "./inbox";
 export { ApiError } from "./errors";

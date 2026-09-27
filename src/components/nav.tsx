@@ -20,6 +20,7 @@ export const MODULES = [
   { href: "/tasks", key: "tasks" },
   { href: "/money", key: "money" },
   { href: "/calendar", key: "calendar" },
+  { href: "/inbox", key: "inbox" },
 ] as const;
 
 export function Icon({ name, className = "h-5 w-5" }: { name: string; className?: string }) {
@@ -64,7 +65,7 @@ export function BottomNav({ badges }: { badges: Badges }) {
   const isActive = useActive();
   return (
     <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
-      <ul className="grid grid-cols-4">
+      <ul className="grid grid-cols-5">
         {MODULES.map((n) => (
           <li key={n.href}>
             <Link

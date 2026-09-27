@@ -15,6 +15,7 @@
     "build:worker": "esbuild worker/index.ts scripts/migrate.ts --bundle --platform=node --target=node22 --format=esm --outdir=dist --tsconfig=tsconfig.json --banner:js=\"import{createRequire}from\\\"module\\\";const require=createRequire(import.meta.url);\" --out-extension:.js=.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
     "@node-rs/argon2": "^2.2.1",
     "croner": "^10.0.1",
     "drizzle-orm": "^0.45.3",

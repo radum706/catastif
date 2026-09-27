@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { BottomNav, SettingsLink, TopNav, WorkspaceSwitcher } from "@/components/nav";
 import { requireSession } from "@/server/auth/session";
-import { payments, tasks } from "@/server/api";
+import { inbox, payments, tasks } from "@/server/api";
 import { getWorkspace } from "@/server/workspace";
 import { today } from "@/lib/dates";
 import { t } from "@/i18n";
@@ -9,11 +9,12 @@ import { t } from "@/i18n";
 export default async function AppLayout({ children }: LayoutProps<"/">) {
   await requireSession();
   const ws = await getWorkspace();
-  const [counts, overdueTasks] = await Promise.all([
+  const [counts, overdueTasks, inboxCount] = await Promise.all([
     payments.openCounts(ws),
     tasks.listTasks({ workspace: ws, completed: false, dueTo: today(), limit: 99 }),
+    inbox.pendingCount(),
   ]);
-  const badges = { money: counts.overdueBills, tasks: overdueTasks.length };
+  const badges = { money: counts.overdueBills, tasks: overdueTasks.length, inbox: inboxCount };
 
   return (
     <div data-ws={ws} className="min-h-screen pb-24 md:pb-10">

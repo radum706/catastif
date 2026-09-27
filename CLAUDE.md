@@ -8,4 +8,6 @@
 - UI strings live only in `src/i18n/en.ts`.
 - Schema change: edit `src/server/db/schema/*`, run `npm run db:generate -- --name x`, and commit the SQL.
 - Before committing: `npm run lint && npm run typecheck && npm test`.
-- AI never writes straight to real tables. Its output goes to the Inbox (Phase 5+).
+- Every account, category, payee, project and task lives in one workspace (`personal` | `work`). Don't let them mix; check with the helpers in `src/server/api/workspace.ts`.
+- AI never writes straight to real tables. Its output goes to the Inbox, and model calls go only through `src/server/llm`.
+- API mutations that others may care about call `emit()` from `src/server/api/events.ts` (webhook outbox).

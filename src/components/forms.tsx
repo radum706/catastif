@@ -76,3 +76,23 @@ export function ConfirmButton({
     </button>
   );
 }
+
+/** Submit button that tells the action which button was pressed (name/value). */
+export function IntentButton({
+  name = "intent",
+  value,
+  children,
+  className = "btn",
+}: {
+  name?: string;
+  value: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  const { pending } = useFormStatus();
+  return (
+    <button type="submit" name={name} value={value} className={className} disabled={pending}>
+      {children}
+    </button>
+  );
+}
