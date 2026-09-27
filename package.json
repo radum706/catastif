@@ -6,7 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node --env-file-if-exists=.env --import tsx scripts/migrate.ts",
+    "worker": "node --env-file-if-exists=.env --import tsx worker/index.ts",
+    "build:worker": "esbuild worker/index.ts scripts/migrate.ts --bundle --platform=node --target=node22 --format=esm --outdir=dist --tsconfig=tsconfig.json --banner:js=\"import{createRequire}from\\\"module\\\";const require=createRequire(import.meta.url);\" --out-extension:.js=.mjs"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.2.1",
