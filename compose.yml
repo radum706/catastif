@@ -1,0 +1,82 @@
+# Catastif on Unraid. Everything user-facing binds to the Tailscale IP only.
+#   cp .env.example .env   # fill in
+#   docker compose up -d --build
+name: catastif
+
+x-db-env: &db-env
+  POSTGRES_USER: ${POSTGRES_USER:-catastif}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+  POSTGRES_DB: ${POSTGRES_DB:-catastif}
+
+x-app-env: &app-env
+  DATABASE_URL: postgres://${POSTGRES_USER:-catastif}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-catastif}
+  APP_TZ: ${APP_TZ:-Europe/Bucharest}
+  TZ: ${APP_TZ:-Europe/Bucharest}
+  SETUP_TOKEN: ${SETUP_TOKEN:-}
+  SESSION_DAYS: ${SESSION_DAYS:-30}
+  COOKIE_SECURE: ${COOKIE_SECURE:-false}
+  RECURRING_HORIZON_MONTHS: ${RECURRING_HORIZON_MONTHS:-12}
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment: *db-env
+    volumes:
+      - ${DATA_DIR:-./data}/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # No ports: only reachable from the other containers.
+
+  app:
+    build: .
+    image: catastif:latest
+    restart: unless-stopped
+    environment: *app-env
+    ports:
+      - "${TAILSCALE_IP:?set TAILSCALE_IP in .env}:${APP_PORT:-3000}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  worker:
+    image: catastif:latest
+    restart: unless-stopped
+    command: ["node", "dist/worker/index.mjs"]
+    environment: *app-env
+    depends_on:
+      app:
+        condition: service_healthy # app runs the migrations first
+
+  adminer:
+    image: adminer:5
+    restart: unless-stopped
+    environment:
+      ADMINER_DEFAULT_SERVER: db
+      ADMINER_DESIGN: dracula
+    ports:
+      - "${TAILSCALE_IP}:${ADMINER_PORT:-8081}:8080"
+    depends_on:
+      - db
+
+  backup:
+    image: pgvector/pgvector:pg16 # same major version as the server, so pg_dump matches
+    restart: unless-stopped
+    entrypoint: ["/bin/bash", "/backup.sh"]
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER:-catastif}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-catastif}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      BACKUP_HOUR: ${BACKUP_HOUR:-3}
+      TZ: ${APP_TZ:-Europe/Bucharest}
+    volumes:
+      - ./docker/backup/backup.sh:/backup.sh:ro
+      - ${BACKUP_DIR:-./backups}:/backups
+    depends_on:
+      db:
+        condition: service_healthy

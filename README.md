@@ -1,36 +1,126 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Catastif
 
-## Getting Started
+Personal, self-hosted organiser: money first, then tasks, resources, memory and an AI inbox.
+Single user, runs on Unraid with Docker Compose, reachable over Tailscale.
 
-First, run the development server:
+**Status:** Phase 1 (Money) done.
+
+## What Phase 1 does
+
+- **Accounts** in EUR or RON (bank, cash, card, other) with an opening balance.
+- **Transactions** have a name, an amount, and a status that follows the money:
+  - money out: `upcoming → paid`
+  - money in: `upcoming → invoiced → received` (salary skips `invoiced`)
+- **Bills:** unpaid money out, grouped as overdue / due in 7 days / next 45 days, with one-tap **Paid**.
+- **To collect:** money in you're waiting for, with how long an invoice has been waiting. One tap marks it **Received**.
+- **Recurring rules** (salary, rent, subscriptions) create upcoming entries 12 months ahead. Beyond that, the forecast calculates them on the fly.
+- **Forecast:** balance at any date, per account and per currency, with a chart and the lowest point.
+- **Safe to spend:** balance minus the bills due before your next income.
+- **Quick add:** one line, parsed locally with a live preview (no AI):
+
+  | You type | Result |
+  |---|---|
+  | `-45 Lidl food` | money out, paid today |
+  | `+4500 salary` | money in, received today |
+  | `-230 Enel unpaid @15` | bill due on the 15th |
+  | `-60 fuel #car yesterday` | category via `#tag`, dated yesterday |
+
+  If the text matches a **payee**, it fills in that payee's default category, account and context.
+- **Transfers** between accounts, including EUR → RON with two different amounts. They never count as income or expense.
+
+Catastif does not issue invoices. It only tracks whether money was invoiced and whether it was paid.
+
+## Run it on Unraid
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone … /mnt/user/appdata/catastif-src && cd /mnt/user/appdata/catastif-src
+cp .env.example .env
+# Set these in .env:
+#   POSTGRES_PASSWORD   (openssl rand -hex 24)
+#   SETUP_TOKEN         (openssl rand -hex 16)
+#   TAILSCALE_IP        (tailscale ip -4)
+#   DATA_DIR, BACKUP_DIR
+docker compose up -d --build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+| Service | What it does | Where |
+|---|---|---|
+| `app` | Next.js UI; runs migrations on start | `http://$TAILSCALE_IP:3000` |
+| `worker` | Nightly jobs (recurring rules, session cleanup; later ntfy) | none |
+| `db` | Postgres 16 + pgvector | internal only |
+| `adminer` | Database GUI | `http://$TAILSCALE_IP:8081` (server `db`) |
+| `backup` | Nightly `pg_dump` into `BACKUP_DIR` | none |
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+**First visit:** open `/login`, enter `SETUP_TOKEN` and choose a password (12+ characters). Then:
+1. Add accounts.
+2. Click **Add starter categories**.
+3. Add payees and recurring rules.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+**Forgot the password:** in Adminer, delete the row in `app_user`. The setup screen comes back.
 
-## Learn More
+**HTTPS:** with `tailscale serve`, set `COOKIE_SECURE=true`.
 
-To learn more about Next.js, take a look at the following resources:
+**Always-on:** the worker runs its catch-up job on start. If the server was off at night, nothing is missed.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Backups
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `backup` writes `catastif_YYYY-MM-DD_HHMM.dump` (pg_dump custom format) to `BACKUP_DIR` every day at `BACKUP_HOUR`.
+- It keeps `BACKUP_KEEP_DAYS` days of dumps.
+- Sync that folder off-site with rclone or an Unraid backup plugin.
 
-## Deploy on Vercel
+```bash
+docker compose run --rm backup now      # take a backup right now
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+# restore into an empty database
+docker compose exec -T db pg_restore --clean --if-exists --no-owner \
+  -U catastif -d catastif < /path/to/catastif_2026-09-27_0300.dump
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Development
+
+Needs Node 22 and Postgres 16 running locally.
+
+```bash
+npm install
+cp .env.example .env      # point DATABASE_URL / TEST_DATABASE_URL at localhost
+npm run db:migrate
+npm run dev               # http://localhost:3000
+npm run worker            # optional
+npm test                  # unit + integration (integration needs TEST_DATABASE_URL)
+npm run lint && npm run typecheck
+```
+
+After changing the schema: `npm run db:generate -- --name what_changed`, then commit the SQL in `drizzle/`.
+
+## Layout
+
+```
+src/
+  app/            UI pages (thin; they call the API)
+  server/api/     typed internal API: the one entry point for UI, MCP and webhooks
+  server/actions/ server actions (form → API)
+  server/auth/    password + DB sessions
+  server/db/      Drizzle schema and client
+  lib/            pure helpers: money, dates, recurrence, quick-add parser
+  i18n/en.ts      every UI string
+worker/           scheduled jobs
+drizzle/          committed migrations
+docker/backup/    backup script
+```
+
+## Data rules
+
+- **Money:** amounts are integers in minor units (cents or bani) and always positive; the direction is `in` or `out`.
+- **Currency:** each transaction's currency must equal its account's currency (composite FK). Totals are per currency, with no FX conversion.
+- **Status:** the database rejects a status that doesn't fit the direction.
+- **Dates:** `date` is the cash date, i.e. when money moved or is expected to move. Marking a transaction paid or received sets both `date` and `settled_at`.
+- **Editing a recurring rule:** its future upcoming entries are rewritten. Past and settled entries are kept.
+
+## Roadmap
+
+1. ~~Money~~
+2. Projects and tasks, "to do before date X"
+3. Resources (people and tools) and materials, cost rollup
+4. Memory: notes, embeddings, semantic search
+5. MCP server (writes become Inbox drafts)
+6. Phone capture webhook and ntfy reminders
