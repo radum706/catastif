@@ -12,8 +12,7 @@ const icons: Record<string, string> = {
   money: "M3 7h18v10H3zM3 10h18M7 14h3",
   calendar: "M4 6h16v14H4zM4 10h16M8 3v4m8-4v4",
   inbox: "M4 13l2-8h12l2 8M4 13v6h16v-6M4 13h5l1 2h4l1-2h5",
-  settings:
-    "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM3 12h2m14 0h2M12 3v2m0 14v2M5.6 5.6l1.4 1.4m10 10l1.4 1.4m0-12.8L17 7M7 17l-1.4 1.4",
+  settings: "M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4",
 };
 
 export const MODULES = [

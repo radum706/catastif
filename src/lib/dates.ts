@@ -89,3 +89,7 @@ export function formatShortDate(d: ISODate, locale = "en-GB"): string {
     toUTC(d),
   );
 }
+
+export function formatWeekday(d: ISODate, locale = "en-GB"): string {
+  return new Intl.DateTimeFormat(locale, { weekday: "long", timeZone: "UTC" }).format(toUTC(d));
+}

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { WorkspaceBadge } from "@/components/ui";
-import { formatShortDate } from "@/lib/dates";
+import { formatShortDate, formatWeekday } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import type { CalendarItem } from "@/server/api/calendar";
 import { dueLabel } from "@/components/task-row";
@@ -32,7 +32,9 @@ export function Agenda({ items, showWorkspace, emptyText }: { items: CalendarIte
     <div className="space-y-3">
       {[...days.entries()].map(([day, list]) => (
         <div key={day}>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">{dueLabel(day)} · {formatShortDate(day)}</p>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">
+            {dueLabel(day) === formatShortDate(day) ? formatWeekday(day) : dueLabel(day)} · {formatShortDate(day)}
+          </p>
           <ul className="card divide-y divide-border">
             {list.map((i) => (
               <li key={i.key}>
