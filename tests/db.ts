@@ -15,6 +15,6 @@ export async function resetDb() {
     migrated = true;
   }
   await db.execute(
-    sql`truncate transactions, transfers, recurring_rules, payees, categories, accounts, sessions, app_user restart identity cascade`,
+    sql`truncate task_activity, task_tags, tags, tasks, sections, projects, transactions, transfers, recurring_rules, payees, categories, accounts, sessions, app_user restart identity cascade`,
   );
 }

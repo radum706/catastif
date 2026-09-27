@@ -1,6 +1,6 @@
-import { and, gte, inArray, isNull, lte, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import { db } from "@/server/db/client";
-import { transactions } from "@/server/db/schema";
+import { transactions, type Workspace } from "@/server/db/schema";
 import { addDays, daysBetween, endOfMonth, startOfMonth, today } from "@/lib/dates";
 import type { CurrencyCode } from "@/lib/money";
 import { listOpen, listTransactions, type TransactionRow } from "./transactions";
@@ -8,11 +8,11 @@ import { listOpen, listTransactions, type TransactionRow } from "./transactions"
 export type BillRow = TransactionRow & { due: string; daysLeft: number };
 
 /** Money out you still owe, grouped by urgency, plus what you paid this month. */
-export async function bills(opts: { soonDays?: number; laterDays?: number } = {}) {
+export async function bills(opts: { workspace?: Workspace; soonDays?: number; laterDays?: number } = {}) {
   const t = today();
   const soon = addDays(t, opts.soonDays ?? 7);
   const horizon = addDays(t, opts.laterDays ?? 45);
-  const open = await listOpen({ direction: "out", excludeTransfers: true });
+  const open = await listOpen({ direction: "out", excludeTransfers: true, workspace: opts.workspace });
   const rows: BillRow[] = open.map((r) => {
     const due = r.tx.dueDate ?? r.tx.date;
     return { ...r, due, daysLeft: daysBetween(t, due) };
@@ -23,6 +23,7 @@ export async function bills(opts: { soonDays?: number; laterDays?: number } = {}
     from: startOfMonth(t),
     to: endOfMonth(t),
     includeTransfers: false,
+    workspace: opts.workspace,
   });
   return {
     overdue: rows.filter((r) => r.due < t),
@@ -37,9 +38,9 @@ export async function bills(opts: { soonDays?: number; laterDays?: number } = {}
 export type CollectRow = TransactionRow & { waitingDays: number; late: boolean };
 
 /** Money in you're waiting for: invoiced (with age) and expected. */
-export async function toCollect() {
+export async function toCollect(opts: { workspace?: Workspace } = {}) {
   const t = today();
-  const open = await listOpen({ direction: "in", excludeTransfers: true });
+  const open = await listOpen({ direction: "in", excludeTransfers: true, workspace: opts.workspace });
   const horizon = addDays(t, 45);
   const rows: CollectRow[] = open.filter((r) => r.tx.status === "invoiced" || r.tx.date <= horizon).map((r) => ({
     ...r,
@@ -52,6 +53,7 @@ export async function toCollect() {
     from: startOfMonth(t),
     to: endOfMonth(t),
     includeTransfers: false,
+    workspace: opts.workspace,
   });
   return {
     invoiced: rows.filter((r) => r.tx.status === "invoiced"),
@@ -69,7 +71,7 @@ export type MonthSummary = {
 };
 
 /** In/out for a month per currency, excluding transfers between your own accounts. */
-export async function monthSummary(month: string = today()) {
+export async function monthSummary(month: string = today(), workspace?: Workspace) {
   const from = startOfMonth(month);
   const to = endOfMonth(month);
   const rows = await db
@@ -80,7 +82,14 @@ export async function monthSummary(month: string = today()) {
       total: sql<string>`sum(${transactions.amount})`,
     })
     .from(transactions)
-    .where(and(gte(transactions.date, from), lte(transactions.date, to), isNull(transactions.transferId)))
+    .where(
+      and(
+        gte(transactions.date, from),
+        lte(transactions.date, to),
+        isNull(transactions.transferId),
+        workspace ? eq(transactions.workspace, workspace) : undefined,
+      ),
+    )
     .groupBy(transactions.currency, transactions.direction, sql`${transactions.settledAt} is not null`);
 
   const map = new Map<CurrencyCode, MonthSummary>();
@@ -98,8 +107,9 @@ export async function monthSummary(month: string = today()) {
 }
 
 /** Settled spending by category for a month (sub-categories roll up to their parent). */
-export async function spendingByCategory(month: string = today()) {
+export async function spendingByCategory(month: string = today(), workspace?: Workspace) {
   const rows = await listTransactions({
+    workspace,
     from: startOfMonth(month),
     to: endOfMonth(month),
     direction: "out",
@@ -118,12 +128,18 @@ export async function spendingByCategory(month: string = today()) {
   return [...map.values()].sort((a, b) => b.total - a.total);
 }
 
-export async function openCounts() {
+export async function openCounts(workspace?: Workspace) {
   const t = today();
   const rows = await db
     .select({ direction: transactions.direction, date: sql<string>`coalesce(${transactions.dueDate}, ${transactions.date})` })
     .from(transactions)
-    .where(and(inArray(transactions.status, ["upcoming", "invoiced"]), isNull(transactions.transferId)));
+    .where(
+      and(
+        inArray(transactions.status, ["upcoming", "invoiced"]),
+        isNull(transactions.transferId),
+        workspace ? eq(transactions.workspace, workspace) : undefined,
+      ),
+    );
   return {
     overdueBills: rows.filter((r) => r.direction === "out" && r.date < t).length,
     lateIncome: rows.filter((r) => r.direction === "in" && r.date < t).length,

@@ -14,7 +14,6 @@ export type QuickAddPayee = {
   defaultDirection: "in" | "out" | null;
   defaultCategoryId: number | null;
   defaultAccountId: number | null;
-  defaultContext: "personal" | "work" | null;
 };
 export type QuickAddCategory = { id: number; name: string; kind: "income" | "expense" };
 
@@ -28,17 +27,25 @@ export type QuickAddResult = {
   payeeId: number | null;
   categoryId: number | null;
   accountId: number | null;
-  context: "personal" | "work" | null;
 };
 
 const AMOUNT_RE = /^([+-])?(\d[\d.,]*)$/;
 const UNPAID_WORDS = new Set(["unpaid", "due", "bill", "todo"]);
 
-function parseDateToken(token: string, today: ISODate): ISODate | null {
+const WEEKDAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+/** "today", "tomorrow", "yesterday", "mon".."sunday" (next one), "@15", "@15.10", "@2026-10-01". */
+export function parseDateToken(token: string, today: ISODate): ISODate | null {
   const t = token.toLowerCase();
-  if (t === "today") return today;
-  if (t === "yesterday") return addDays(today, -1);
-  if (t === "tomorrow") return addDays(today, 1);
+  if (t === "today" || t === "azi") return today;
+  if (t === "yesterday" || t === "ieri") return addDays(today, -1);
+  if (t === "tomorrow" || t === "tmrw" || t === "maine") return addDays(today, 1);
+  const wd = WEEKDAYS.findIndex((d) => t === d || (t.length > 3 && d === t.slice(0, 3) && /^[a-z]+day$/.test(t)));
+  if (wd !== -1) {
+    const current = new Date(`${today}T00:00:00Z`).getUTCDay();
+    const diff = (wd - current + 7) % 7 || 7;
+    return addDays(today, diff);
+  }
   if (!t.startsWith("@")) return null;
   const v = t.slice(1);
   if (isISODate(v)) return v;
@@ -142,6 +149,5 @@ export function parseQuickAdd(
     payeeId: payee?.id ?? null,
     categoryId,
     accountId: payee?.defaultAccountId ?? null,
-    context: payee?.defaultContext ?? null,
   };
 }

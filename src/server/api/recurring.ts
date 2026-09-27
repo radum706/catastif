@@ -1,11 +1,12 @@
 import { and, asc, eq, gte } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/server/db/client";
-import { accounts, recurringRules, transactions, type RecurringRule } from "@/server/db/schema";
+import { accounts, recurringRules, transactions, type RecurringRule, type Workspace } from "@/server/db/schema";
 import { addDays, addMonths, maxDate, today, type ISODate } from "@/lib/dates";
 import { occurrencesBetween } from "@/lib/recurrence";
 import { notFound } from "./errors";
 import * as s from "./schemas";
+import { accountRef, assertCategoryIn, assertPayeeIn } from "./workspace";
 
 export const createRuleInput = z.object({
   title: s.name,
@@ -14,7 +15,6 @@ export const createRuleInput = z.object({
   accountId: s.id,
   categoryId: s.optionalId,
   payeeId: s.optionalId,
-  context: s.context.default("personal"),
   frequency: s.frequency.default("monthly"),
   interval: z.number().int().min(1).max(366).default(1),
   startDate: s.isoDate,
@@ -44,11 +44,12 @@ export function pendingOccurrences(rule: RecurringRule, to: ISODate, from: ISODa
   return occurrencesBetween(rule, start, to);
 }
 
-export async function listRules() {
+export async function listRules(opts: { workspace?: Workspace } = {}) {
   return db
     .select({ rule: recurringRules, accountName: accounts.name })
     .from(recurringRules)
     .innerJoin(accounts, eq(accounts.id, recurringRules.accountId))
+    .where(opts.workspace ? eq(recurringRules.workspace, opts.workspace) : undefined)
     .orderBy(asc(recurringRules.active), asc(recurringRules.title));
 }
 
@@ -75,7 +76,7 @@ export async function generateForRule(rule: RecurringRule, until: ISODate = defa
           dueDate: rule.dueOffsetDays != null ? addDays(d, rule.dueOffsetDays) : null,
           categoryId: rule.categoryId,
           payeeId: rule.payeeId,
-          context: rule.context,
+          workspace: rule.workspace,
           recurringRuleId: rule.id,
           occurrenceDate: d,
         })),
@@ -108,15 +109,12 @@ async function dropFutureOccurrences(ruleId: number) {
     );
 }
 
-async function accountCurrency(accountId: number) {
-  const [acc] = await db.select({ currency: accounts.currency }).from(accounts).where(eq(accounts.id, accountId));
-  return acc?.currency ?? notFound("Account");
-}
-
 export async function createRule(input: z.input<typeof createRuleInput>) {
   const data = createRuleInput.parse(input);
-  const currency = await accountCurrency(data.accountId);
-  const [rule] = await db.insert(recurringRules).values({ ...data, currency }).returning();
+  const { currency, workspace } = await accountRef(data.accountId);
+  await assertCategoryIn(data.categoryId, workspace);
+  await assertPayeeIn(data.payeeId, workspace);
+  const [rule] = await db.insert(recurringRules).values({ ...data, currency, workspace }).returning();
   await generateForRule(rule);
   return rule;
 }
@@ -127,12 +125,14 @@ export async function createRule(input: z.input<typeof createRuleInput>) {
  */
 export async function updateRule(input: z.input<typeof updateRuleInput>) {
   const { id, ...data } = updateRuleInput.parse(input);
-  await getRule(id);
-  const currency = data.accountId ? await accountCurrency(data.accountId) : undefined;
+  const current = await getRule(id);
+  const ref = data.accountId ? await accountRef(data.accountId) : current;
+  await assertCategoryIn(data.categoryId !== undefined ? data.categoryId : current.categoryId, ref.workspace);
+  await assertPayeeIn(data.payeeId !== undefined ? data.payeeId : current.payeeId, ref.workspace);
   await dropFutureOccurrences(id);
   const [rule] = await db
     .update(recurringRules)
-    .set({ ...data, ...(currency ? { currency } : {}), generatedUntil: addDays(today(), -1) })
+    .set({ ...data, currency: ref.currency, workspace: ref.workspace, generatedUntil: addDays(today(), -1) })
     .where(eq(recurringRules.id, id))
     .returning();
   await generateForRule(rule);

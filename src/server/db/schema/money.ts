@@ -10,30 +10,24 @@ import {
   pgEnum,
   pgTable,
   text,
-  timestamp,
   unique,
   uniqueIndex,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
+import { timestamps, workspaceEnum, type Workspace } from "./common";
+import { projects, tasks } from "./tasks";
 
 export const currencyEnum = pgEnum("currency", ["EUR", "RON"]);
 export const accountTypeEnum = pgEnum("account_type", ["bank", "cash", "card", "other"]);
 export const directionEnum = pgEnum("direction", ["in", "out"]);
 export const txStatusEnum = pgEnum("tx_status", ["upcoming", "invoiced", "paid", "received"]);
-export const contextEnum = pgEnum("context", ["personal", "work"]);
 export const categoryKindEnum = pgEnum("category_kind", ["income", "expense"]);
 export const frequencyEnum = pgEnum("frequency", ["daily", "weekly", "monthly", "yearly"]);
 
 // Amounts are always minor units (cents / bani). mode "number" is exact up to 2^53.
 const money = (name: string) => bigint(name, { mode: "number" });
 const day = (name: string) => date(name, { mode: "string" });
-const timestamps = {
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-};
+
 
 export const accounts = pgTable(
   "accounts",
@@ -44,12 +38,15 @@ export const accounts = pgTable(
     currency: currencyEnum("currency").notNull(),
     openingBalance: money("opening_balance").notNull().default(0),
     openingDate: day("opening_date").notNull().default(sql`current_date`),
-    context: contextEnum("context").notNull().default("personal"),
+    workspace: workspaceEnum("workspace").notNull().default("personal"),
     archived: boolean("archived").notNull().default(false),
     notes: text("notes"),
     ...timestamps,
   },
-  (t) => [unique("accounts_id_currency_uq").on(t.id, t.currency)],
+  (t) => [
+    unique("accounts_id_currency_uq").on(t.id, t.currency),
+    unique("accounts_id_workspace_uq").on(t.id, t.workspace),
+  ],
 );
 
 export const categories = pgTable(
@@ -58,13 +55,14 @@ export const categories = pgTable(
     id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
     name: text("name").notNull(),
     kind: categoryKindEnum("kind").notNull(),
+    workspace: workspaceEnum("workspace").notNull().default("personal"),
     parentId: integer("parent_id").references((): AnyPgColumn => categories.id, {
       onDelete: "set null",
     }),
     archived: boolean("archived").notNull().default(false),
     ...timestamps,
   },
-  (t) => [uniqueIndex("categories_kind_name_uq").on(t.kind, sql`lower(${t.name})`)],
+  (t) => [uniqueIndex("categories_ws_kind_name_uq").on(t.workspace, t.kind, sql`lower(${t.name})`)],
 );
 
 export const payees = pgTable(
@@ -72,6 +70,7 @@ export const payees = pgTable(
   {
     id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
     name: text("name").notNull(),
+    workspace: workspaceEnum("workspace").notNull().default("personal"),
     defaultDirection: directionEnum("default_direction"),
     defaultCategoryId: integer("default_category_id").references(() => categories.id, {
       onDelete: "set null",
@@ -79,12 +78,11 @@ export const payees = pgTable(
     defaultAccountId: integer("default_account_id").references(() => accounts.id, {
       onDelete: "set null",
     }),
-    defaultContext: contextEnum("default_context"),
     archived: boolean("archived").notNull().default(false),
     notes: text("notes"),
     ...timestamps,
   },
-  (t) => [uniqueIndex("payees_name_uq").on(sql`lower(${t.name})`)],
+  (t) => [uniqueIndex("payees_ws_name_uq").on(t.workspace, sql`lower(${t.name})`)],
 );
 
 export const transfers = pgTable("transfers", {
@@ -105,7 +103,7 @@ export const recurringRules = pgTable(
     accountId: integer("account_id").notNull(),
     categoryId: integer("category_id").references(() => categories.id, { onDelete: "set null" }),
     payeeId: integer("payee_id").references(() => payees.id, { onDelete: "set null" }),
-    context: contextEnum("context").notNull().default("personal"),
+    workspace: workspaceEnum("workspace").notNull().default("personal"),
     frequency: frequencyEnum("frequency").notNull().default("monthly"),
     interval: integer("interval").notNull().default(1),
     startDate: day("start_date").notNull(),
@@ -124,6 +122,14 @@ export const recurringRules = pgTable(
       columns: [t.accountId, t.currency],
       foreignColumns: [accounts.id, accounts.currency],
     }).onDelete("cascade"),
+    // Moving an account to the other workspace moves everything on it.
+    foreignKey({
+      name: "recurring_rules_account_workspace_fk",
+      columns: [t.accountId, t.workspace],
+      foreignColumns: [accounts.id, accounts.workspace],
+    })
+      .onDelete("cascade")
+      .onUpdate("cascade"),
     check("recurring_rules_amount_positive", sql`${t.amount} > 0`),
     check("recurring_rules_interval_positive", sql`${t.interval} >= 1`),
     check(
@@ -150,15 +156,14 @@ export const transactions = pgTable(
     settledAt: day("settled_at"),
     categoryId: integer("category_id").references(() => categories.id, { onDelete: "set null" }),
     payeeId: integer("payee_id").references(() => payees.id, { onDelete: "set null" }),
-    context: contextEnum("context").notNull().default("personal"),
+    workspace: workspaceEnum("workspace").notNull().default("personal"),
     recurringRuleId: integer("recurring_rule_id").references(() => recurringRules.id, {
       onDelete: "set null",
     }),
     occurrenceDate: day("occurrence_date"),
     transferId: integer("transfer_id").references(() => transfers.id, { onDelete: "cascade" }),
-    // FKs added in Phase 2 when projects/tasks exist.
-    projectId: integer("project_id"),
-    taskId: integer("task_id"),
+    projectId: integer("project_id").references(() => projects.id, { onDelete: "set null" }),
+    taskId: integer("task_id").references(() => tasks.id, { onDelete: "set null" }),
     notes: text("notes"),
     ...timestamps,
   },
@@ -168,6 +173,13 @@ export const transactions = pgTable(
       columns: [t.accountId, t.currency],
       foreignColumns: [accounts.id, accounts.currency],
     }).onDelete("cascade"),
+    foreignKey({
+      name: "transactions_account_workspace_fk",
+      columns: [t.accountId, t.workspace],
+      foreignColumns: [accounts.id, accounts.workspace],
+    })
+      .onDelete("cascade")
+      .onUpdate("cascade"),
     check("transactions_amount_positive", sql`${t.amount} > 0`),
     check(
       "transactions_status_matches_direction",
@@ -186,10 +198,10 @@ export const transactions = pgTable(
   ],
 );
 
+export type { Workspace };
 export type Currency = (typeof currencyEnum.enumValues)[number];
 export type Direction = (typeof directionEnum.enumValues)[number];
 export type TxStatus = (typeof txStatusEnum.enumValues)[number];
-export type Context = (typeof contextEnum.enumValues)[number];
 export type Frequency = (typeof frequencyEnum.enumValues)[number];
 export type AccountType = (typeof accountTypeEnum.enumValues)[number];
 export type CategoryKind = (typeof categoryKindEnum.enumValues)[number];

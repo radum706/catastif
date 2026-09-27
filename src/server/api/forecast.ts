@@ -1,7 +1,7 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/server/db/client";
-import { accounts, recurringRules, type Account } from "@/server/db/schema";
+import { accounts, recurringRules, type Account, type Workspace } from "@/server/db/schema";
 import { addDays, daysBetween, today, type ISODate } from "@/lib/dates";
 import { signed, type CurrencyCode } from "@/lib/money";
 import { pendingOccurrences } from "./recurring";
@@ -23,11 +23,19 @@ export type PlannedItem = {
   transactionId?: number;
 };
 
-async function plannedUpTo(to: ISODate): Promise<PlannedItem[]> {
+async function plannedUpTo(to: ISODate, workspace?: Workspace): Promise<PlannedItem[]> {
   const t = today();
   const [open, rules] = await Promise.all([
-    listOpen({ to }),
-    db.select().from(recurringRules).where(eq(recurringRules.active, true)),
+    listOpen({ to, workspace }),
+    db
+      .select()
+      .from(recurringRules)
+      .where(
+        and(
+          eq(recurringRules.active, true),
+          workspace ? eq(recurringRules.workspace, workspace) : undefined,
+        ),
+      ),
   ]);
   const items: PlannedItem[] = open.map(({ tx }) => ({
     accountId: tx.accountId,
@@ -70,6 +78,7 @@ export type CurrencyTotal = { currency: CurrencyCode; current: number; atDate: n
 
 export const balanceAtInput = z.object({
   date: s.isoDate,
+  workspace: s.workspace.optional(),
   includeArchived: z.boolean().default(false),
 });
 
@@ -80,13 +89,15 @@ export const balanceAtInput = z.object({
  * Totals are per currency; no FX conversion.
  */
 export async function balanceAt(input: z.input<typeof balanceAtInput>) {
-  const { date, includeArchived } = balanceAtInput.parse(input);
+  const { date, includeArchived, workspace } = balanceAtInput.parse(input);
   const t = today();
-  const accRows = (await db.select().from(accounts)).filter((a) => includeArchived || !a.archived);
+  const accRows = (
+    await db.select().from(accounts).where(workspace ? eq(accounts.workspace, workspace) : undefined)
+  ).filter((a) => includeArchived || !a.archived);
   const [settledNow, settledAtDate, planned] = await Promise.all([
     settledTotals(),
     date < t ? settledTotals(date) : Promise.resolve(null),
-    date >= t ? plannedUpTo(date) : Promise.resolve([] as PlannedItem[]),
+    date >= t ? plannedUpTo(date, workspace) : Promise.resolve([] as PlannedItem[]),
   ]);
 
   const plannedByAccount = new Map<number, number>();
@@ -113,11 +124,11 @@ export async function balanceAt(input: z.input<typeof balanceAtInput>) {
 }
 
 /** Daily total per currency from today to `to`, plus the lowest point. For the chart. */
-export async function forecastSeries(input: { to: ISODate }) {
-  const { to } = z.object({ to: s.isoDate }).parse(input);
+export async function forecastSeries(input: { to: ISODate; workspace?: Workspace }) {
+  const { to, workspace } = z.object({ to: s.isoDate, workspace: s.workspace.optional() }).parse(input);
   const t = today();
   const end = to < t ? t : to;
-  const { perAccount, planned } = await balanceAt({ date: end });
+  const { perAccount, planned } = await balanceAt({ date: end, workspace });
 
   const series = new Map<CurrencyCode, { date: ISODate; balance: number }[]>();
   const running = new Map<CurrencyCode, number>();
@@ -161,10 +172,10 @@ export type SafeToSpend = {
  * Current balance minus every bill due before the next expected income (per currency).
  * Transfers between your own accounts are ignored. Without upcoming income, looks 30 days ahead.
  */
-export async function safeToSpend(): Promise<SafeToSpend[]> {
+export async function safeToSpend(workspace?: Workspace): Promise<SafeToSpend[]> {
   const t = today();
   const horizon = addDays(t, 62);
-  const { totals, planned } = await balanceAt({ date: horizon });
+  const { totals, planned } = await balanceAt({ date: horizon, workspace });
   return totals.map(({ currency, current }) => {
     const items = planned.filter((p) => p.currency === currency && !p.isTransfer);
     const income = items.find((p) => p.direction === "in" && !p.overdue);

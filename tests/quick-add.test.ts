@@ -3,9 +3,9 @@ import { parseQuickAdd, type QuickAddCategory, type QuickAddPayee } from "@/lib/
 
 const today = "2026-09-27";
 const payees: QuickAddPayee[] = [
-  { id: 1, name: "Lidl", defaultDirection: "out", defaultCategoryId: 3, defaultAccountId: 7, defaultContext: "personal" },
-  { id: 2, name: "Acme Corp", defaultDirection: "in", defaultCategoryId: 1, defaultAccountId: 8, defaultContext: "work" },
-  { id: 3, name: "Enel", defaultDirection: "out", defaultCategoryId: 4, defaultAccountId: null, defaultContext: null },
+  { id: 1, name: "Lidl", defaultDirection: "out", defaultCategoryId: 3, defaultAccountId: 7 },
+  { id: 2, name: "Acme Corp", defaultDirection: "in", defaultCategoryId: 1, defaultAccountId: 8 },
+  { id: 3, name: "Enel", defaultDirection: "out", defaultCategoryId: 4, defaultAccountId: null },
 ];
 const categories: QuickAddCategory[] = [
   { id: 1, name: "Salary", kind: "income" },
@@ -45,7 +45,7 @@ describe("parseQuickAdd", () => {
       direction: "in",
       amount: 120050,
       payeeId: 2,
-      context: "work",
+      accountId: 8,
     });
   });
 
@@ -67,5 +67,30 @@ describe("parseQuickAdd", () => {
 
   it("reports a missing amount", () => {
     expect(parse("Lidl").amount).toBeNull();
+  });
+});
+
+import { parseTaskLine } from "@/lib/task-parse";
+
+describe("parseTaskLine", () => {
+  // 2026-09-27 is a Sunday.
+  it("parses date, time, priority and tags", () => {
+    expect(parseTaskLine("call accountant tomorrow 14:00 !high #admin", today)).toEqual({
+      title: "Call accountant",
+      dueDate: "2026-09-28",
+      dueTime: "14:00",
+      priority: "high",
+      tags: ["admin"],
+    });
+  });
+
+  it("understands weekdays as the next one", () => {
+    expect(parseTaskLine("order tiles fri #site-a", today)).toMatchObject({ dueDate: "2026-10-02", tags: ["site a"] });
+    expect(parseTaskLine("gym sunday", today).dueDate).toBe("2026-10-04");
+  });
+
+  it("a time alone means today; plain text has no date", () => {
+    expect(parseTaskLine("standup 9:30", today)).toMatchObject({ dueDate: today, dueTime: "09:30" });
+    expect(parseTaskLine("read book", today)).toMatchObject({ dueDate: null, priority: "none", tags: [] });
   });
 });

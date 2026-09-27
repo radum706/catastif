@@ -2,11 +2,12 @@ import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, isNull, lte, or, sq
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import { db } from "@/server/db/client";
-import { accounts, categories, payees, transactions, transfers, type Transaction } from "@/server/db/schema";
+import { accounts, categories, payees, transactions, transfers, type Transaction, type Workspace } from "@/server/db/schema";
 import { today } from "@/lib/dates";
 import { parseQuickAdd } from "@/lib/quick-add";
 import { invalid, notFound } from "./errors";
 import * as s from "./schemas";
+import { accountRef, assertCategoryIn, assertPayeeIn, assertProjectIn, assertTaskIn } from "./workspace";
 
 const SETTLED = ["paid", "received"] as const;
 export const isSettled = (status: string) => (SETTLED as readonly string[]).includes(status);
@@ -28,7 +29,6 @@ export const createTransactionInput = z.object({
   invoicedAt: s.isoDate.nullish(),
   categoryId: s.optionalId,
   payeeId: s.optionalId,
-  context: s.context.optional(),
   projectId: s.optionalId,
   taskId: s.optionalId,
   notes: s.notes,
@@ -44,7 +44,9 @@ export const listTransactionsInput = z.object({
   payeeId: s.optionalId,
   direction: s.direction.optional(),
   status: z.array(s.txStatus).optional(),
-  context: s.context.optional(),
+  workspace: s.workspace.optional(),
+  projectId: s.optionalId,
+  taskId: s.optionalId,
   q: z.string().trim().max(200).optional(),
   includeTransfers: z.boolean().default(true),
   limit: z.number().int().min(1).max(1000).default(200),
@@ -57,12 +59,15 @@ function defaultStatus(direction: "in" | "out", date: string) {
   return direction === "in" ? ("received" as const) : ("paid" as const);
 }
 
-async function accountCurrency(accountId: number) {
-  const [acc] = await db
-    .select({ currency: accounts.currency })
-    .from(accounts)
-    .where(eq(accounts.id, accountId));
-  return acc?.currency ?? notFound("Account");
+/** Category, payee (and later project/task) must live in the transaction's workspace. */
+async function checkLinks(
+  workspace: Workspace,
+  data: { categoryId?: number | null; payeeId?: number | null; projectId?: number | null; taskId?: number | null },
+) {
+  await assertCategoryIn(data.categoryId, workspace);
+  await assertPayeeIn(data.payeeId, workspace);
+  await assertProjectIn(data.projectId, workspace);
+  await assertTaskIn(data.taskId, workspace);
 }
 
 /** Keeps settledAt / invoicedAt consistent with the status. */
@@ -81,7 +86,8 @@ export async function createTransaction(input: z.input<typeof createTransactionI
   const date = data.date ?? today();
   const status = data.status ?? defaultStatus(data.direction, date);
   if (!allowedStatus(data.direction, status)) invalid(`Status "${status}" is not valid for money ${data.direction}`);
-  const currency = await accountCurrency(data.accountId);
+  const { currency, workspace } = await accountRef(data.accountId);
+  await checkLinks(workspace, data);
   const [row] = await db
     .insert(transactions)
     .values({
@@ -89,7 +95,7 @@ export async function createTransaction(input: z.input<typeof createTransactionI
       date,
       status,
       currency,
-      context: data.context ?? "personal",
+      workspace,
       invoicedAt: data.invoicedAt ?? null,
       ...lifecycleFields(status, date, { settledAt: null, invoicedAt: data.invoicedAt ?? null }),
     })
@@ -115,7 +121,15 @@ export async function updateTransaction(input: z.input<typeof updateTransactionI
   const status = data.status ?? current.status;
   const date = data.date ?? current.date;
   if (!allowedStatus(direction, status)) invalid(`Status "${status}" is not valid for money ${direction}`);
-  const currency = data.accountId ? await accountCurrency(data.accountId) : current.currency;
+  const { currency, workspace } = data.accountId
+    ? await accountRef(data.accountId)
+    : { currency: current.currency, workspace: current.workspace };
+  await checkLinks(workspace, {
+    categoryId: data.categoryId !== undefined ? data.categoryId : current.categoryId,
+    payeeId: data.payeeId !== undefined ? data.payeeId : current.payeeId,
+    projectId: data.projectId !== undefined ? data.projectId : current.projectId,
+    taskId: data.taskId !== undefined ? data.taskId : current.taskId,
+  });
   const statusChanged = status !== current.status;
   const lifecycle = lifecycleFields(status, date, statusChanged ? undefined : current);
   if (data.invoicedAt !== undefined) lifecycle.invoicedAt = data.invoicedAt;
@@ -124,7 +138,7 @@ export async function updateTransaction(input: z.input<typeof updateTransactionI
   if (isSettled(status) && data.date) lifecycle.settledAt = data.date;
   const [row] = await db
     .update(transactions)
-    .set({ ...data, currency, ...lifecycle })
+    .set({ ...data, currency, workspace, ...lifecycle })
     .where(eq(transactions.id, id))
     .returning();
   return row;
@@ -214,7 +228,7 @@ export async function createTransfer(input: z.input<typeof createTransferInput>)
 
   return db.transaction(async (tx) => {
     const [transfer] = await tx.insert(transfers).values({ date, note: data.note }).returning();
-    const common = { transferId: transfer.id, date, notes: data.note, context: from.context };
+    const common = { transferId: transfer.id, date, notes: data.note };
     await tx.insert(transactions).values([
       {
         ...common,
@@ -223,6 +237,7 @@ export async function createTransfer(input: z.input<typeof createTransferInput>)
         amount: data.amount,
         accountId: from.id,
         currency: from.currency,
+        workspace: from.workspace,
         status: upcoming ? "upcoming" : "paid",
         settledAt: upcoming ? null : date,
       },
@@ -233,6 +248,7 @@ export async function createTransfer(input: z.input<typeof createTransferInput>)
         amount: amountIn,
         accountId: to.id,
         currency: to.currency,
+        workspace: to.workspace,
         status: upcoming ? "upcoming" : "received",
         settledAt: upcoming ? null : date,
       },
@@ -243,20 +259,22 @@ export async function createTransfer(input: z.input<typeof createTransferInput>)
 
 export const quickAddInput = z.object({
   text: z.string().trim().min(1).max(500),
+  workspace: s.workspace,
   accountId: s.optionalId,
 });
 
 /** One-line entry, e.g. "-45 Lidl food". The form's account wins over the payee default. */
 export async function quickAdd(input: z.input<typeof quickAddInput>) {
-  const { text, accountId } = quickAddInput.parse(input);
+  const { text, accountId, workspace } = quickAddInput.parse(input);
   const [payeeRows, categoryRows] = await Promise.all([
-    db.select().from(payees).where(eq(payees.archived, false)),
-    db.select().from(categories).where(eq(categories.archived, false)),
+    db.select().from(payees).where(and(eq(payees.archived, false), eq(payees.workspace, workspace))),
+    db.select().from(categories).where(and(eq(categories.archived, false), eq(categories.workspace, workspace))),
   ]);
   const parsed = parseQuickAdd(text, { today: today(), payees: payeeRows, categories: categoryRows });
   if (!parsed.amount) invalid("No amount found. Try something like “-45 Lidl food”.");
   const account = accountId ?? parsed.accountId;
   if (!account) invalid("Pick an account");
+  if ((await accountRef(account)).workspace !== workspace) invalid("Account belongs to the other workspace");
   return createTransaction({
     title: parsed.title,
     direction: parsed.direction,
@@ -267,7 +285,6 @@ export async function quickAdd(input: z.input<typeof quickAddInput>) {
     dueDate: parsed.dueDate,
     categoryId: parsed.categoryId,
     payeeId: parsed.payeeId,
-    context: parsed.context ?? undefined,
   });
 }
 
@@ -288,7 +305,9 @@ export async function listTransactions(input: z.input<typeof listTransactionsInp
   if (f.payeeId) where.push(eq(transactions.payeeId, f.payeeId));
   if (f.direction) where.push(eq(transactions.direction, f.direction));
   if (f.status?.length) where.push(inArray(transactions.status, f.status));
-  if (f.context) where.push(eq(transactions.context, f.context));
+  if (f.workspace) where.push(eq(transactions.workspace, f.workspace));
+  if (f.projectId) where.push(eq(transactions.projectId, f.projectId));
+  if (f.taskId) where.push(eq(transactions.taskId, f.taskId));
   if (!f.includeTransfers) where.push(isNull(transactions.transferId));
   if (f.q) {
     const like = `%${f.q.replace(/[%_\\]/g, "\\$&")}%`;
@@ -319,8 +338,11 @@ export async function listTransactions(input: z.input<typeof listTransactionsInp
 export type TransactionRow = Awaited<ReturnType<typeof listTransactions>>[number];
 
 /** Open (not settled) transactions, oldest first. Used by bills, collect and forecast. */
-export async function listOpen(opts: { direction?: "in" | "out"; to?: string; excludeTransfers?: boolean } = {}) {
+export async function listOpen(
+  opts: { direction?: "in" | "out"; to?: string; excludeTransfers?: boolean; workspace?: Workspace } = {},
+) {
   const where: SQL[] = [inArray(transactions.status, ["upcoming", "invoiced"])];
+  if (opts.workspace) where.push(eq(transactions.workspace, opts.workspace));
   if (opts.direction) where.push(eq(transactions.direction, opts.direction));
   if (opts.to) where.push(lte(transactions.date, opts.to));
   if (opts.excludeTransfers) where.push(isNull(transactions.transferId));
