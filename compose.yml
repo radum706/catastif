@@ -62,6 +62,24 @@ services:
     depends_on:
       - db
 
+  # Optional: `docker compose --profile n8n up -d`
+  # From n8n, call Catastif at http://app:3000/api/v1/… ; Catastif webhooks can target http://n8n:5678/webhook/…
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:${N8N_VERSION:-latest}
+    profiles: ["n8n"]
+    restart: unless-stopped
+    environment:
+      GENERIC_TIMEZONE: ${APP_TZ:-Europe/Bucharest}
+      TZ: ${APP_TZ:-Europe/Bucharest}
+      N8N_HOST: ${N8N_HOST:-localhost}
+      WEBHOOK_URL: ${N8N_WEBHOOK_URL:-}
+      N8N_SECURE_COOKIE: ${COOKIE_SECURE:-false}
+      N8N_DIAGNOSTICS_ENABLED: "false"
+    ports:
+      - "${TAILSCALE_IP}:${N8N_PORT:-5678}:5678"
+    volumes:
+      - ${DATA_DIR:-./data}/n8n:/home/node/.n8n
+
   backup:
     image: pgvector/pgvector:pg16 # same major version as the server, so pg_dump matches
     restart: unless-stopped

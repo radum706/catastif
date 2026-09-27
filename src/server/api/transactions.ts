@@ -6,6 +6,7 @@ import { accounts, categories, payees, transactions, transfers, type Transaction
 import { today } from "@/lib/dates";
 import { parseQuickAdd } from "@/lib/quick-add";
 import { invalid, notFound } from "./errors";
+import { emit } from "./events";
 import * as s from "./schemas";
 import { accountRef, assertCategoryIn, assertPayeeIn, assertProjectIn, assertTaskIn } from "./workspace";
 
@@ -100,6 +101,7 @@ export async function createTransaction(input: z.input<typeof createTransactionI
       ...lifecycleFields(status, date, { settledAt: null, invoicedAt: data.invoicedAt ?? null }),
     })
     .returning();
+  await emit("transaction.created", row.workspace, { transaction: row });
   return row;
 }
 
@@ -141,6 +143,7 @@ export async function updateTransaction(input: z.input<typeof updateTransactionI
     .set({ ...data, currency, workspace, ...lifecycle })
     .where(eq(transactions.id, id))
     .returning();
+  await emit("transaction.updated", row.workspace, { transaction: row });
   return row;
 }
 
@@ -162,6 +165,7 @@ export async function settleTransaction(input: { id: number; date?: string; amou
     })
     .where(eq(transactions.id, id))
     .returning();
+  await emit("transaction.settled", row.workspace, { transaction: row });
   return row;
 }
 
@@ -201,6 +205,7 @@ export async function deleteTransaction(txId: number) {
   } else {
     await db.delete(transactions).where(eq(transactions.id, txId));
   }
+  await emit("transaction.deleted", tx.workspace, { id: tx.id, title: tx.title, transferId: tx.transferId });
 }
 
 export const createTransferInput = z.object({

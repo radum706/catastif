@@ -5,6 +5,7 @@ import { projects, sections, tasks, transactions, type Workspace } from "@/serve
 import { today } from "@/lib/dates";
 import type { CurrencyCode } from "@/lib/money";
 import { invalid, notFound } from "./errors";
+import { emit } from "./events";
 import * as s from "./schemas";
 
 export const PROJECT_COLORS = ["teal", "blue", "violet", "pink", "orange", "amber", "green", "slate"] as const;
@@ -70,7 +71,7 @@ export async function getProject(projectId: number) {
 
 export async function createProject(input: z.input<typeof createProjectInput>) {
   const { template, ...data } = createProjectInput.parse(input);
-  return db.transaction(async (tx) => {
+  const project = await db.transaction(async (tx) => {
     const [{ pos }] = await tx
       .select({ pos: max(projects.position) })
       .from(projects)
@@ -85,6 +86,8 @@ export async function createProject(input: z.input<typeof createProjectInput>) {
     }
     return project;
   });
+  await emit("project.created", project.workspace, { project });
+  return project;
 }
 
 export async function updateProject(input: z.input<typeof updateProjectInput>) {

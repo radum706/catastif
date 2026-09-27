@@ -9,4 +9,5 @@ export * as payments from "./payments";
 export * as projects from "./projects";
 export * as tasks from "./tasks";
 export * as calendar from "./calendar";
+export * as integrations from "./integrations";
 export { ApiError } from "./errors";

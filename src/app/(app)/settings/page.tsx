@@ -11,6 +11,7 @@ const LINKS = [
   { href: "/settings/categories", title: t.settings.categories, hint: t.settings.categoriesHint },
   { href: "/settings/payees", title: t.settings.payees, hint: t.settings.payeesHint },
   { href: "/settings/recurring", title: t.settings.recurring, hint: t.settings.recurringHint },
+  { href: "/settings/integrations", title: t.settings.integrations, hint: t.settings.integrationsHint },
 ];
 
 export default function SettingsPage() {

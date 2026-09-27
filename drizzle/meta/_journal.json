@@ -36,6 +36,13 @@
       "when": 1790535704840,
       "tag": "0004_tasks",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790536710557,
+      "tag": "0005_integrations",
+      "breakpoints": true
     }
   ]
 }

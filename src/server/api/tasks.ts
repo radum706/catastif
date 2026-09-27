@@ -14,6 +14,7 @@ import {
 } from "@/server/db/schema";
 import { addDays, today, type ISODate } from "@/lib/dates";
 import { invalid, notFound } from "./errors";
+import { emit } from "./events";
 import * as s from "./schemas";
 import { listOpen, listTransactions } from "./transactions";
 
@@ -138,6 +139,7 @@ export async function createTask(input: z.input<typeof createTaskInput>) {
     .returning();
   if (tagList?.length) await setTags(task.id, task.workspace, tagList);
   await logActivity(task.id, "created");
+  await emit("task.created", task.workspace, { task, tags: tagList ?? [] });
   return task;
 }
 
@@ -177,6 +179,7 @@ export async function updateTask(input: z.input<typeof updateTaskInput>) {
   const changed = TRACKED.filter((k) => data[k] !== undefined && data[k] !== current[k]);
   if (changed.length) await logActivity(id, "updated", null, { fields: changed });
   if (moving) await logActivity(id, "moved", null, { projectId: placement.projectId, sectionId: placement.sectionId });
+  await emit("task.updated", row.workspace, { task: row, changed: [...changed, ...(moving ? ["section"] : [])] });
   return row;
 }
 
@@ -190,6 +193,7 @@ export async function setCompleted(input: { id: number; completed: boolean }) {
     .where(eq(tasks.id, id))
     .returning();
   await logActivity(id, completed ? "completed" : "reopened");
+  await emit(completed ? "task.completed" : "task.reopened", row.workspace, { task: row });
   return row;
 }
 
@@ -222,12 +226,17 @@ export async function moveTask(input: { id: number; sectionId: number | null; af
     .set({ sectionId: data.sectionId ?? null, position })
     .where(eq(tasks.id, data.id))
     .returning();
-  if ((data.sectionId ?? null) !== task.sectionId) await logActivity(task.id, "moved", null, { sectionId: data.sectionId ?? null });
+  if ((data.sectionId ?? null) !== task.sectionId) {
+    await logActivity(task.id, "moved", null, { sectionId: data.sectionId ?? null });
+    await emit("task.updated", row.workspace, { task: row, changed: ["section"] });
+  }
   return row;
 }
 
 export async function deleteTask(taskId: number) {
+  const task = await getTaskRow(taskId);
   await db.delete(tasks).where(eq(tasks.id, taskId));
+  await emit("task.deleted", task.workspace, { id: task.id, title: task.title });
 }
 
 export async function addComment(input: { taskId: number; body: string }) {
