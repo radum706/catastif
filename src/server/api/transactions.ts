@@ -105,7 +105,10 @@ export async function getTransaction(txId: number) {
 export async function updateTransaction(input: z.input<typeof updateTransactionInput>) {
   const { id, ...data } = updateTransactionInput.parse(input);
   const current = await getTransaction(id);
-  if (current.transferId && (data.direction || data.accountId)) {
+  const moved =
+    (data.direction && data.direction !== current.direction) ||
+    (data.accountId && data.accountId !== current.accountId);
+  if (current.transferId && moved) {
     invalid("Edit the transfer instead of changing its legs' account or direction");
   }
   const direction = data.direction ?? current.direction;
