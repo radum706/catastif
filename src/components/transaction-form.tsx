@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { Field } from "@/components/ui";
@@ -183,7 +184,7 @@ export function TransactionForm({
       </Field>
 
       <div className="flex justify-end gap-2">
-        <a href={returnTo} className="btn">{t.common.cancel}</a>
+        <Link href={returnTo} className="btn">{t.common.cancel}</Link>
         <SubmitButton>{initial.id ? t.common.save : t.common.create}</SubmitButton>
       </div>
     </ActionForm>

@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import { useActionState, useMemo, useRef, useState } from "react";
 import { FormMessage, SubmitButton } from "@/components/forms";
 import { formatMoney, type CurrencyCode } from "@/lib/money";
 import { formatShortDate } from "@/lib/dates";
 import { parseQuickAdd, type QuickAddCategory, type QuickAddPayee } from "@/lib/quick-add";
+import type { ActionState } from "@/server/actions/form";
 import { quickAddAction } from "@/server/actions/money";
 import { t } from "@/i18n";
 
@@ -21,10 +22,17 @@ export function QuickAdd({
   categories: QuickAddCategory[];
   today: string;
 }) {
-  const [state, action] = useActionState(quickAddAction, null);
   const [text, setText] = useState("");
   const [accountId, setAccountId] = useState<number | "">("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const [state, action] = useActionState(async (prev: ActionState, fd: FormData) => {
+    const res = await quickAddAction(prev, fd);
+    if (!res?.error) {
+      setText("");
+      inputRef.current?.focus();
+    }
+    return res;
+  }, null);
 
   const parsed = useMemo(() => (text.trim() ? parseQuickAdd(text, { today, payees, categories }) : null), [text, today, payees, categories]);
 
@@ -32,13 +40,6 @@ export function QuickAdd({
   const [touched, setTouched] = useState(false);
   const effectiveAccount = touched ? accountId : (parsed?.accountId ?? accountId ?? "");
   const account = accounts.find((a) => a.id === effectiveAccount) ?? accounts[0];
-
-  useEffect(() => {
-    if (state && !state.error) {
-      setText("");
-      inputRef.current?.focus();
-    }
-  }, [state]);
 
   const category = categories.find((c) => c.id === parsed?.categoryId)?.name;
 

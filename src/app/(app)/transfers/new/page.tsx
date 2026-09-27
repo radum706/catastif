@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { Field, PageHeader } from "@/components/ui";
 import { today } from "@/lib/dates";
@@ -37,7 +38,7 @@ export default async function NewTransferPage() {
           <input name="note" className="input" />
         </Field>
         <div className="flex justify-end gap-2 sm:col-span-2">
-          <a href="/transactions" className="btn">{t.common.cancel}</a>
+          <Link href="/transactions" className="btn">{t.common.cancel}</Link>
           <SubmitButton>{t.common.create}</SubmitButton>
         </div>
       </ActionForm>

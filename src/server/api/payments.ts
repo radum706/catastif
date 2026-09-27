@@ -8,9 +8,10 @@ import { listOpen, listTransactions, type TransactionRow } from "./transactions"
 export type BillRow = TransactionRow & { due: string; daysLeft: number };
 
 /** Money out you still owe, grouped by urgency, plus what you paid this month. */
-export async function bills(opts: { soonDays?: number } = {}) {
+export async function bills(opts: { soonDays?: number; laterDays?: number } = {}) {
   const t = today();
   const soon = addDays(t, opts.soonDays ?? 7);
+  const horizon = addDays(t, opts.laterDays ?? 45);
   const open = await listOpen({ direction: "out", excludeTransfers: true });
   const rows: BillRow[] = open.map((r) => {
     const due = r.tx.dueDate ?? r.tx.date;
@@ -26,7 +27,9 @@ export async function bills(opts: { soonDays?: number } = {}) {
   return {
     overdue: rows.filter((r) => r.due < t),
     dueSoon: rows.filter((r) => r.due >= t && r.due <= soon),
-    later: rows.filter((r) => r.due > soon),
+    later: rows.filter((r) => r.due > soon && r.due <= horizon),
+    /** Planned further out (mostly recurring); shown as a count linking to the forecast. */
+    beyond: rows.filter((r) => r.due > horizon).length,
     paidThisMonth,
   };
 }
@@ -37,7 +40,8 @@ export type CollectRow = TransactionRow & { waitingDays: number; late: boolean }
 export async function toCollect() {
   const t = today();
   const open = await listOpen({ direction: "in", excludeTransfers: true });
-  const rows: CollectRow[] = open.map((r) => ({
+  const horizon = addDays(t, 45);
+  const rows: CollectRow[] = open.filter((r) => r.tx.status === "invoiced" || r.tx.date <= horizon).map((r) => ({
     ...r,
     waitingDays: r.tx.invoicedAt ? daysBetween(r.tx.invoicedAt, t) : Math.max(0, daysBetween(r.tx.date, t)),
     late: r.tx.date < t,
@@ -83,8 +87,11 @@ export async function monthSummary(month: string = today()) {
   for (const r of rows) {
     const m = map.get(r.currency) ?? { currency: r.currency, inSettled: 0, outSettled: 0, inPlanned: 0, outPlanned: 0 };
     const v = Number(r.total);
-    if (r.direction === "in") r.settled ? (m.inSettled += v) : (m.inPlanned += v);
-    else r.settled ? (m.outSettled += v) : (m.outPlanned += v);
+    if (r.direction === "in") {
+      if (r.settled) m.inSettled += v;
+      else m.inPlanned += v;
+    } else if (r.settled) m.outSettled += v;
+    else m.outPlanned += v;
     map.set(r.currency, m);
   }
   return { from, to, summary: [...map.values()] };

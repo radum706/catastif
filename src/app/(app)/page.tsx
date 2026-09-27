@@ -20,7 +20,7 @@ export default async function HomePage() {
     payments.openCounts(),
     payees.listPayees(),
     categories.listCategories(),
-    transactions.listTransactions({ limit: 6 }),
+    transactions.listTransactions({ limit: 6, to: now }),
   ]);
 
   if (!accs.length) {

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { TxList, TxRow } from "@/components/tx-row";
 import { Empty, Field, Money, PageHeader } from "@/components/ui";
+import { addDays, formatShortDate, today } from "@/lib/dates";
 import type { CurrencyCode } from "@/lib/money";
 import { accounts, categories, payees, transactions } from "@/server/api";
 import { param } from "@/server/form-data";
@@ -26,8 +27,10 @@ export default async function TransactionsPage({ searchParams }: PageProps<"/tra
     from: dateOrUndef(param(sp, "from")),
     to: dateOrUndef(param(sp, "to")),
   };
+  // Recurring rules plan a year ahead; by default stop a month out so today isn't buried.
+  const defaultTo = f.to ? undefined : addDays(today(), 31);
   const [rows, accs, cats, pays] = await Promise.all([
-    transactions.listTransactions({ ...f, limit: 300 }),
+    transactions.listTransactions({ ...f, to: f.to ?? defaultTo, limit: 300 }),
     accounts.listAccounts({ includeArchived: true }),
     categories.listCategories(),
     payees.listPayees(),
@@ -86,7 +89,10 @@ export default async function TransactionsPage({ searchParams }: PageProps<"/tra
       </details>
 
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
-        <span>{fmt(t.tx.count, { n: rows.length })}</span>
+        <span>
+          {fmt(t.tx.count, { n: rows.length })}
+          {defaultTo && <> · {fmt(t.tx.futureHidden, { date: formatShortDate(defaultTo) })}</>}
+        </span>
         <span className="flex gap-3">
           {[...net.entries()].map(([cur, v]) => (
             <Money key={cur} amount={v} currency={cur} />

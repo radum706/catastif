@@ -119,6 +119,7 @@ export const en = {
     add: "New transaction",
     newTransfer: "New transfer",
     count: "{n} shown",
+    futureHidden: "Showing up to {date}. Use the To filter to see further ahead.",
   },
   transfer: {
     title: "New transfer",
@@ -135,7 +136,8 @@ export const en = {
     intro: "Money out you still owe.",
     overdue: "Overdue",
     dueSoon: "Due in the next 7 days",
-    later: "Later",
+    later: "Next 45 days",
+    beyond: "+ {n} more planned further ahead.",
     paidThisMonth: "Paid this month",
     dueIn: "in {n} d",
     dueToday: "today",

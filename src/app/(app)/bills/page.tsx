@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { TxList, TxRow } from "@/components/tx-row";
 import { Badge, Empty, LinkButton, Money, PageHeader, Section } from "@/components/ui";
 import { formatShortDate } from "@/lib/dates";
@@ -46,7 +47,7 @@ function BillGroup({ title, rows }: { title: string; rows: BillRow[] }) {
 
 export default async function BillsPage() {
   const b = await payments.bills();
-  const open = b.overdue.length + b.dueSoon.length + b.later.length;
+  const open = b.overdue.length + b.dueSoon.length + b.later.length + b.beyond;
   return (
     <>
       <PageHeader
@@ -58,6 +59,12 @@ export default async function BillsPage() {
       <BillGroup title={t.bills.overdue} rows={b.overdue} />
       <BillGroup title={t.bills.dueSoon} rows={b.dueSoon} />
       <BillGroup title={t.bills.later} rows={b.later} />
+      {b.beyond > 0 && (
+        <p className="-mt-3 mb-6 text-sm text-muted">
+          {fmt(t.bills.beyond, { n: b.beyond })}{" "}
+          <Link href="/forecast" className="text-accent">{t.nav.forecast} →</Link>
+        </p>
+      )}
       {b.paidThisMonth.length > 0 && (
         <Section title={`${t.bills.paidThisMonth} (${b.paidThisMonth.length})`} aside={<Totals rows={b.paidThisMonth} />}>
           <TxList>
