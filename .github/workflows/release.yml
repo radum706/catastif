@@ -1,0 +1,25 @@
+# Updates the `release` branch from main. Run it by hand (Actions → Release → Run workflow)
+# or by pushing a tag like v1.2.0.
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build release branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          scripts/make-release.sh "$GITHUB_SHA"
+          git push origin release

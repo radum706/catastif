@@ -1,0 +1,20 @@
+# Paths copied from main to the release branch (everything needed to build and run with Docker).
+# Not released: tests, lint/test configs, drizzle-kit config, agent notes, CI.
+.dockerignore
+.env.example
+.gitignore
+Dockerfile
+README.md
+compose.yml
+docker
+docs
+drizzle
+next.config.ts
+package-lock.json
+package.json
+postcss.config.mjs
+public
+scripts/migrate.ts
+src
+tsconfig.json
+worker

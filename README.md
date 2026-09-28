@@ -61,10 +61,23 @@ It's single-user, runs on Unraid with Docker Compose, and you reach it over Tail
 
 Catastif does not issue legal invoices. It only tracks whether money was invoiced and whether it was paid.
 
+## Branches
+
+| Branch | What it's for |
+|---|---|
+| `main` | Development: all code, tests and tooling. |
+| `release` | Only what the server needs to build and run (the paths listed in `release.files`). Deploy from this branch. |
+
+`release` is generated from `main` and never edited by hand. To update it, do one of these:
+- On GitHub, go to **Actions → Release → Run workflow**.
+- Push a tag: `git tag v0.3.0 && git push origin v0.3.0`.
+- Run it locally: `scripts/make-release.sh && git push origin release`.
+
 ## Run it on Unraid
 
 ```bash
-git clone … /mnt/user/appdata/catastif-src && cd /mnt/user/appdata/catastif-src
+git clone -b release https://github.com/radum706/catastif.git /mnt/user/appdata/catastif-src
+cd /mnt/user/appdata/catastif-src
 cp .env.example .env
 # Set these in .env:
 #   POSTGRES_PASSWORD   (openssl rand -hex 24)
@@ -73,6 +86,8 @@ cp .env.example .env
 #   DATA_DIR, BACKUP_DIR
 docker compose up -d --build
 ```
+
+To update later, run `git pull && docker compose up -d --build`.
 
 | Service | What it does | Where |
 |---|---|---|
