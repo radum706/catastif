@@ -115,6 +115,8 @@ To update later, run `git pull && docker compose up -d --build`.
 
 **HTTPS:** with `tailscale serve`, set `COOKIE_SECURE=true`.
 
+**If the app container is "unhealthy":** run `docker compose logs app`. Lines starting with `[migrate]` explain database problems. The most common one is a `POSTGRES_PASSWORD` changed after the first start: Postgres keeps the password from its first run.
+
 **Always-on:** the worker runs its catch-up job on start. If the server was off at night, nothing is missed.
 
 ## Backups

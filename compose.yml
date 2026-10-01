@@ -9,7 +9,12 @@ x-db-env: &db-env
   POSTGRES_DB: ${POSTGRES_DB:-catastif}
 
 x-app-env: &app-env
-  DATABASE_URL: postgres://${POSTGRES_USER:-catastif}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-catastif}
+  # Separate PG* variables (not a URL) so any password works.
+  PGHOST: db
+  PGPORT: "5432"
+  PGUSER: ${POSTGRES_USER:-catastif}
+  PGPASSWORD: ${POSTGRES_PASSWORD}
+  PGDATABASE: ${POSTGRES_DB:-catastif}
   APP_TZ: ${APP_TZ:-Europe/Bucharest}
   TZ: ${APP_TZ:-Europe/Bucharest}
   SETUP_TOKEN: ${SETUP_TOKEN:-}
