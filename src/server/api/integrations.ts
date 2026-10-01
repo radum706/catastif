@@ -1,5 +1,5 @@
 import { createHash, createHmac, randomBytes } from "node:crypto";
-import { and, asc, desc, eq, inArray, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/server/db/client";
 import {
@@ -37,8 +37,13 @@ export async function createToken(input: z.input<typeof createTokenInput>) {
   return { token: raw, row };
 }
 
+/** Tokens made in Settings (OAuth tokens are listed per connected app instead). */
 export async function listTokens() {
-  return db.select().from(apiTokens).orderBy(asc(apiTokens.revokedAt), desc(apiTokens.createdAt));
+  return db
+    .select()
+    .from(apiTokens)
+    .where(isNull(apiTokens.clientId))
+    .orderBy(asc(apiTokens.revokedAt), desc(apiTokens.createdAt));
 }
 
 export async function revokeToken(tokenId: number) {
@@ -55,7 +60,13 @@ export async function verifyToken(raw: string): Promise<ApiToken | null> {
   const [row] = await db
     .select()
     .from(apiTokens)
-    .where(and(eq(apiTokens.tokenHash, sha256(raw)), isNull(apiTokens.revokedAt)));
+    .where(
+      and(
+        eq(apiTokens.tokenHash, sha256(raw)),
+        isNull(apiTokens.revokedAt),
+        or(isNull(apiTokens.expiresAt), gt(apiTokens.expiresAt, new Date())),
+      ),
+    );
   if (!row) return null;
   // Cheap "last used", at most once a minute.
   if (!row.lastUsedAt || Date.now() - row.lastUsedAt.getTime() > 60_000) {

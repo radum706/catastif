@@ -50,6 +50,13 @@
       "when": 1790537176190,
       "tag": "0006_inbox",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790873999015,
+      "tag": "0007_oauth",
+      "breakpoints": true
     }
   ]
 }

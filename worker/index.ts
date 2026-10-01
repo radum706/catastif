@@ -3,6 +3,7 @@ import { Cron } from "croner";
 import { lt } from "drizzle-orm";
 import { overdueDigest } from "@/server/api/digest";
 import { deliverDue, pruneDeliveries } from "@/server/api/integrations";
+import { pruneOauth } from "@/server/api/oauth";
 import { generateAll } from "@/server/api/recurring";
 import { db, closeDb } from "@/server/db/client";
 import { sessions } from "@/server/db/schema";
@@ -41,6 +42,7 @@ const jobs = [
     job("cleanup", async () => {
       await db.delete(sessions).where(lt(sessions.expiresAt, new Date()));
       await pruneDeliveries(30);
+      await pruneOauth();
     }),
   ),
   new Cron(process.env.DIGEST_CRON || "0 8 * * *", { timezone: tz, protect: true }, () => job("overdue digest", overdueDigest)),

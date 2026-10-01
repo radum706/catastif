@@ -23,7 +23,8 @@ COPY --from=build --chown=app:app /app/dist ./dist
 COPY --from=build --chown=app:app /app/drizzle ./drizzle
 USER app
 EXPOSE 3000
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
+# Generous start period: the first start runs migrations and the Gen8 is not fast.
+HEALTHCHECK --interval=20s --timeout=5s --start-period=120s --retries=5 \
   CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 # Migrations run on every start; they're idempotent.
 CMD ["sh", "-c", "node dist/scripts/migrate.mjs && exec node server.js"]

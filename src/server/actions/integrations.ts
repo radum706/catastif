@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { integrations } from "@/server/api";
+import { integrations, oauth } from "@/server/api";
 import { requireSession } from "@/server/auth/session";
 import type { TokenScope } from "@/server/db/schema";
 import { t } from "@/i18n";
@@ -69,6 +69,10 @@ export async function rotateSecretAction(fd: FormData) {
 
 export async function deleteWebhookAction(fd: FormData) {
   await act(() => integrations.deleteWebhook(int(fd, "id")));
+}
+
+export async function disconnectAppAction(fd: FormData) {
+  await act(() => oauth.revokeClient(str(fd, "clientId")));
 }
 
 export async function retryDeliveryAction(fd: FormData) {

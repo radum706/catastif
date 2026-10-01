@@ -66,6 +66,18 @@ export async function setupPassword(setupToken: string, password: string): Promi
   return { ok: true };
 }
 
+/** Checks the password without starting a session (used by the OAuth consent screen). */
+export async function checkPassword(password: string): Promise<boolean> {
+  await brake();
+  const [user] = await db.select().from(appUser).limit(1);
+  if (!user || !(await verify(user.passwordHash, password))) {
+    failures++;
+    return false;
+  }
+  failures = 0;
+  return true;
+}
+
 export async function login(password: string): Promise<AuthResult> {
   await brake();
   const [user] = await db.select().from(appUser).limit(1);

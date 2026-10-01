@@ -1,9 +1,9 @@
 import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { connect } from "./connection";
 import * as schema from "./schema";
 
-function createDb(url: string) {
-  const client = postgres(url, { max: 10 });
+function createDb() {
+  const client = connect({ max: 10 });
   return { client, db: drizzle(client, { schema }) };
 }
 
@@ -12,9 +12,7 @@ const globalForDb = globalThis as unknown as { __catastifDb?: DbBundle };
 
 function bundle(): DbBundle {
   if (!globalForDb.__catastifDb) {
-    const url = process.env.DATABASE_URL;
-    if (!url) throw new Error("DATABASE_URL is not set");
-    globalForDb.__catastifDb = createDb(url);
+    globalForDb.__catastifDb = createDb();
   }
   return globalForDb.__catastifDb;
 }

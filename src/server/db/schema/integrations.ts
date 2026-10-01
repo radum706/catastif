@@ -5,7 +5,17 @@ import { workspaceEnum } from "./common";
 export const TOKEN_SCOPES = ["read", "write", "inbox", "calendar"] as const;
 export type TokenScope = (typeof TOKEN_SCOPES)[number];
 
-/** Bearer tokens for n8n, phone shortcuts, calendar apps. Only a hash is stored. */
+/** Apps connected through OAuth (e.g. the Claude app). Registered dynamically (RFC 7591). */
+export const oauthClients = pgTable("oauth_clients", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  redirectUris: text("redirect_uris").array().notNull().$type<string[]>(),
+  /** sha256 of the secret for confidential clients; null for public (PKCE-only) clients. */
+  secretHash: text("secret_hash"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Bearer tokens for n8n, phone shortcuts, calendar apps and OAuth clients. Only a hash is stored. */
 export const apiTokens = pgTable("api_tokens", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   name: text("name").notNull(),
@@ -17,6 +27,38 @@ export const apiTokens = pgTable("api_tokens", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  /** Set for OAuth access tokens (short-lived); null for tokens made in Settings. */
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  clientId: text("client_id").references(() => oauthClients.id, { onDelete: "cascade" }),
+});
+
+/** One-time authorization codes (10 minutes, PKCE S256). */
+export const oauthCodes = pgTable("oauth_codes", {
+  codeHash: text("code_hash").primaryKey(),
+  clientId: text("client_id")
+    .notNull()
+    .references(() => oauthClients.id, { onDelete: "cascade" }),
+  redirectUri: text("redirect_uri").notNull(),
+  codeChallenge: text("code_challenge").notNull(),
+  scopes: text("scopes").array().notNull().$type<TokenScope[]>(),
+  workspace: workspaceEnum("workspace"),
+  resource: text("resource"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+});
+
+/** Refresh tokens; rotated on every use. */
+export const oauthRefreshTokens = pgTable("oauth_refresh_tokens", {
+  tokenHash: text("token_hash").primaryKey(),
+  clientId: text("client_id")
+    .notNull()
+    .references(() => oauthClients.id, { onDelete: "cascade" }),
+  scopes: text("scopes").array().notNull().$type<TokenScope[]>(),
+  workspace: workspaceEnum("workspace"),
+  resource: text("resource"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
 });
 
 export const WEBHOOK_EVENTS = [
@@ -81,5 +123,6 @@ export const webhookDeliveries = pgTable(
 );
 
 export type ApiToken = typeof apiTokens.$inferSelect;
+export type OauthClient = typeof oauthClients.$inferSelect;
 export type Webhook = typeof webhooks.$inferSelect;
 export type WebhookDelivery = typeof webhookDeliveries.$inferSelect;
