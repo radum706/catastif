@@ -44,6 +44,8 @@ services:
   app:
     build: .
     image: catastif:latest
+    # Rebuild on every deploy, so git-based deploys (Dockhand, Portainer…) never run an old image.
+    pull_policy: build
     restart: unless-stopped
     environment: *app-env
     ports:
@@ -53,7 +55,8 @@ services:
         condition: service_healthy
 
   worker:
-    image: catastif:latest
+    image: catastif:latest # built by the app service
+    pull_policy: never
     restart: unless-stopped
     command: ["node", "dist/worker/index.mjs"]
     environment: *app-env
