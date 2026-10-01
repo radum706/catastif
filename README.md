@@ -51,6 +51,12 @@ It's single-user, runs on Unraid with Docker Compose, and you reach it over Tail
 - AI uses Claude Haiku (`LLM_MODEL`). Bank, card, ID and phone numbers and e-mail addresses are removed before anything is sent.
 - If the model is unavailable, or `LLM_PROVIDER=parser`, the local one-line parsers draft instead.
 
+**Claude connector (MCP):**
+- Claude (the app, desktop, or Claude Code) can read your tasks, money and calendar, and draft items into the Inbox.
+- It can change existing items only if you allow it.
+- You connect with OAuth from the Claude app's **Add custom connector**, or with a token.
+- Details: [docs/MCP.md](docs/MCP.md).
+
 **Integrations** (Settings → Integrations):
 - API tokens with scopes, optionally limited to one workspace.
 - REST API `/api/v1`.
@@ -147,6 +153,8 @@ After changing the schema: `npm run db:generate -- --name what_changed`, then co
 src/
   app/(app)/        UI: / (home), tasks/, money/, calendar/, inbox/, settings/
   app/api/v1/       REST API for n8n, phone shortcuts, calendar apps
+  app/api/mcp/      MCP endpoint for Claude; app/api/oauth/ is its OAuth server
+  server/mcp/       MCP tools (one server per request, bound to the caller's token)
   server/api/       typed internal API: the one entry point for UI, REST, webhooks and MCP
   server/llm/       the only code that talks to a model (provider set by LLM_PROVIDER)
   server/actions/   server actions (form → API)
@@ -173,5 +181,5 @@ docs/               INTEGRATIONS.md
 3. ~~Integrations: REST, webhooks, n8n, iCal; Inbox with AI drafts~~
 4. Resources (people and tools) and materials, cost roll-up
 5. Memory: notes, embeddings, semantic search
-6. MCP server for the Claude app (on top of `/api/v1`; writes become Inbox drafts)
+6. ~~MCP server for the Claude app (writes become Inbox drafts)~~
 7. ntfy reminders, recurring tasks, bank CSV import

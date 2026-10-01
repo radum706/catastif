@@ -76,6 +76,33 @@ export async function capture(input: z.input<typeof captureInput>) {
   return row;
 }
 
+/**
+ * A draft that is already structured (e.g. written by Claude through MCP). It is validated
+ * and parked in the Inbox like any other draft; nothing real is created until approval.
+ */
+export async function createDraft(input: {
+  source: z.input<typeof inboxSource>;
+  kind: "task" | "transaction";
+  draft: unknown;
+  rawText: string;
+  extractor: string;
+}) {
+  const draft = input.kind === "task" ? taskDraft.parse(input.draft) : transactionDraft.parse(input.draft);
+  const [row] = await db
+    .insert(inboxItems)
+    .values({
+      source: inboxSource.parse(input.source),
+      workspace: draft.workspace,
+      rawText: input.rawText.slice(0, 5000) || draft.title,
+      kind: input.kind,
+      draft,
+      extractor: input.extractor,
+    })
+    .returning();
+  await emit("inbox.created", row.workspace, { item: row });
+  return row;
+}
+
 export async function getInboxItem(itemId: number) {
   const [row] = await db.select().from(inboxItems).where(eq(inboxItems.id, itemId));
   return row ?? notFound("Inbox item");

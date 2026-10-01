@@ -6,13 +6,14 @@ import {
   createWebhookAction,
   deleteTokenAction,
   deleteWebhookAction,
+  disconnectAppAction,
   pingWebhookAction,
   retryDeliveryAction,
   revokeTokenAction,
   rotateSecretAction,
   toggleWebhookAction,
 } from "@/server/actions/integrations";
-import { integrations } from "@/server/api";
+import { integrations, oauth } from "@/server/api";
 import { WEBHOOK_EVENTS } from "@/server/db/schema";
 import { fmt, t } from "@/i18n";
 
@@ -21,18 +22,53 @@ export const metadata = { title: t.integrations.title };
 const when = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
 export default async function IntegrationsPage() {
-  const [tokens, hooks, deliveries] = await Promise.all([
+  const [apps, tokens, hooks, deliveries] = await Promise.all([
+    oauth.listConnectedApps(),
     integrations.listTokens(),
     integrations.listWebhooks(),
     integrations.listDeliveries({ limit: 25 }),
   ]);
   const h = await headers();
-  const origin = `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host")}`;
+  const origin = process.env.PUBLIC_URL?.replace(/\/+$/, "") || `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host")}`;
   const hookName = new Map(hooks.map((w) => [w.id, w.name]));
 
   return (
     <>
       <PageHeader title={t.integrations.title} intro={`${t.integrations.intro} ${t.integrations.docs}`} />
+
+      <Section title={t.integrations.claude}>
+        <div className="card space-y-3 p-4 text-sm">
+          <p>{t.integrations.claudeHint}</p>
+          <p className="text-muted">{t.integrations.claudeApp}</p>
+          <code className="num block overflow-x-auto rounded-lg bg-surface-2 px-3 py-2 text-xs">{`${origin}/api/mcp`}</code>
+          <p className="text-muted">{t.integrations.claudeCode}</p>
+          <code className="num block overflow-x-auto rounded-lg bg-surface-2 px-3 py-2 text-xs">{`claude mcp add --transport http catastif ${origin}/api/mcp --header "Authorization: Bearer cat_…"`}</code>
+          <p className="text-xs text-muted">{t.integrations.publicNote}</p>
+        </div>
+        <h3 className="mb-2 mt-4 text-sm font-semibold">{t.integrations.connected}</h3>
+        {apps.length === 0 ? (
+          <p className="text-sm text-muted">{t.integrations.noneConnected}</p>
+        ) : (
+          <ul className="card divide-y divide-border">
+            {apps.map(({ client, grant, lastGrant }) => (
+              <li key={client.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-sm">
+                <span className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium">{client.name}</span>
+                  {grant?.scopes.map((s) => (
+                    <Badge key={s}>{s}</Badge>
+                  ))}
+                  {grant?.workspace && <WorkspaceBadge ws={grant.workspace} long />}
+                  {lastGrant && <span className="text-xs text-muted">{fmt(t.integrations.since, { when: when.format(new Date(lastGrant)) })}</span>}
+                </span>
+                <form action={disconnectAppAction}>
+                  <input type="hidden" name="clientId" value={client.id} />
+                  <ConfirmButton message={t.common.confirmDelete}>{t.integrations.disconnect}</ConfirmButton>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
 
       <Section title={t.integrations.tokens}>
         <p className="mb-2 text-sm text-muted">{t.integrations.tokensHint}</p>
